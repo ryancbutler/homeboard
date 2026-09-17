@@ -1,9 +1,9 @@
-name: Publish Docker image
+name: Publish tagged container images
 
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 permissions:
   contents: read
@@ -23,11 +23,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set image metadata
         id: metadata
         uses: docker/metadata-action@v5
         with:
-          images: butlerrc30/homeboard
+          images: |
+            butlerrc30/homeboard
+            ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -39,7 +48,9 @@ jobs:
         id: tooling-metadata
         uses: docker/metadata-action@v5
         with:
-          images: butlerrc30/homeboard
+          images: |
+            butlerrc30/homeboard
+            ghcr.io/${{ github.repository }}
           flavor: |
             latest=auto
             suffix=-tools,onlatest=true

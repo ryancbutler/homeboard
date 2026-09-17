@@ -1425,19 +1425,42 @@ input[type="file"]::file-selector-button:hover {
   margin-top: 2px;
 }
 
-/* Responsive columns */
-@media(max-width: 768px) {
+/* Keep two children side by side on portrait household displays. */
+@media(min-width: 520px) and (max-width: 768px) {
   .child-columns-grid {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    gap: 16px;
-    padding-bottom: 14px;
-    -webkit-overflow-scrolling: touch;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
   .child-column {
-    flex: 0 0 86%;
-    min-width: 270px;
-    scroll-snap-align: center;
+    padding: 16px 12px;
+    gap: 14px;
+  }
+  .child-col-header {
+    gap: 9px;
+  }
+  .child-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+  }
+  .child-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 1.25rem;
+  }
+  .child-task-card {
+    gap: 6px;
+    padding: 8px;
+  }
+  .task-icon-badge {
+    width: 30px;
+    height: 30px;
+  }
+  .task-circle-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .task-title-text {
+    font-size: 0.82rem;
   }
 }
