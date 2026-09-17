@@ -112,6 +112,7 @@ jobs:
           tags: |
             type=raw,value=v${{ steps.version.outputs.value }}-tools
             type=raw,value=${{ steps.version.outputs.value }}-tools
+            type=raw,value=latest-tools,enable=${{ !contains(steps.version.outputs.value, '-') }}
 
       - name: Build and push web image
         if: steps.release.outputs.publish == 'true'
