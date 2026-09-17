@@ -1,0 +1,26 @@
+# Dependencies and generated output are recreated inside the image.
+node_modules
+.next
+coverage
+*.tsbuildinfo
+
+# Local secrets and runtime data.
+.env
+.env.*
+!.env.example
+data
+garage/garage.toml
+
+# Source-control and local development files.
+.git
+.gitignore
+.vscode
+.idea
+*.log
+
+# Files not needed by the production Docker build.
+README.md
+docker-compose*.yml
+helm
+src/**/*.test.ts
+vitest.config.ts

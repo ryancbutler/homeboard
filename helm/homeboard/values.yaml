@@ -1,0 +1,25 @@
+image:
+  repository: ghcr.io/example/homeboard
+  tag: latest
+  pullPolicy: IfNotPresent
+replicaCount: 2
+service:
+  port: 3000
+ingress:
+  enabled: true
+  className: nginx
+  host: homeboard.example.internal
+  tlsSecret: ""
+config:
+  appName: Homeboard
+  databaseUrl: ""
+secrets:
+  existingSecret: homeboard-secrets
+  databaseUrlKey: DATABASE_URL
+  sessionSecretKey: SESSION_SECRET
+resources:
+  web: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 512Mi } }
+  worker: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 256Mi } }
+postgres:
+  enabled: false
+  # Use a managed or separately deployed PostgreSQL service in production.

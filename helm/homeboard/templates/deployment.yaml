@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homeboard.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector: { matchLabels: { app.kubernetes.io/name: {{ include "homeboard.name" . }} } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: {{ include "homeboard.name" . }} } }
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports: [{ containerPort: 3000, name: http }]
+          envFrom: [{ configMapRef: { name: {{ include "homeboard.fullname" . }} } }]
+          env:
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.secrets.databaseUrlKey }} } } }
+            - { name: SESSION_SECRET, valueFrom: { secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.secrets.sessionSecretKey }} } } }
+          readinessProbe: { httpGet: { path: /api/v1/dashboard, port: http }, initialDelaySeconds: 5 }
+          livenessProbe: { httpGet: { path: /, port: http }, initialDelaySeconds: 15 }
+          resources: {{- toYaml .Values.resources.web | nindent 12 }}

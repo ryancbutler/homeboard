@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9C82E6" />
+      <stop offset="100%" stop-color="#6750AB" />
+    </linearGradient>
+    <linearGradient id="roofGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE7D0" />
+      <stop offset="100%" stop-color="#FFC599" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#302050" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Fun Clay-rounded App Badge -->
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#bgGrad)" filter="url(#shadow)" />
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.35" />
+
+  <!-- Chimney with puff -->
+  <rect x="38" y="16" width="7" height="12" rx="3" fill="#FFB787" />
+  <!-- Sparkle Star above chimney -->
+  <path d="M41.5 8 L42.8 11.5 L46.5 12 L43.5 14 L44.5 17.5 L41.5 15.5 L38.5 17.5 L39.5 14 L36.5 12 L40.2 11.5 Z" fill="#FFE17D" />
+
+  <!-- Cute Rounded Roof -->
+  <path d="M12 28 C12 26 13.5 24 15 22.8 L29.5 13.2 C31 12.2 33 12.2 34.5 13.2 L49 22.8 C50.5 24 52 26 52 28 C52 30 50 31 48 30 L32 19 L16 30 C14 31 12 30 12 28 Z" fill="url(#roofGrad)" />
+
+  <!-- House Body -->
+  <rect x="17" y="28" width="30" height="23" rx="6" fill="#FFFDF8" filter="url(#shadow)" />
+
+  <!-- Cheerful Mint Green Checkmark Badge -->
+  <circle cx="32" cy="38" r="10" fill="#67BC7A" />
+  <path d="M27.5 38 L30.5 41 L36.5 35" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Playful Little Base Dots -->
+  <circle cx="10" cy="53" r="2" fill="#FFE17D" opacity="0.8" />
+  <circle cx="54" cy="51" r="2.5" fill="#FFE17D" opacity="0.8" />
+</svg>
