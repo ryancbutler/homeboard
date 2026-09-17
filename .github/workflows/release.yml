@@ -116,7 +116,7 @@ jobs:
 
       - name: Build and push web image
         if: steps.release.outputs.publish == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime-web
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build and push tooling image
         if: steps.release.outputs.publish == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime-tools

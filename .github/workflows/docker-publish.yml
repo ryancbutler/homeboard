@@ -59,7 +59,7 @@ jobs:
             type=semver,pattern={{version}}
 
       - name: Build and push web image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime-web
@@ -70,7 +70,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
 
       - name: Build and push tooling image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime-tools
