@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - package.json
+      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:
@@ -29,7 +30,7 @@ jobs:
       - name: Read application version
         id: version
         shell: bash
-        run: echo "value=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: node -p "'value=' + require('./package.json').version" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
         id: release
