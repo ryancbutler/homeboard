@@ -24,3 +24,4 @@ docker-compose*.yml
 helm
 src/**/*.test.ts
 vitest.config.ts
+helm-values.yaml

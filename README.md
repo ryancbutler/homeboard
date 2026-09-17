@@ -193,8 +193,8 @@ Customize [`helm/homeboard/values.yaml`](file:///d:/gitprojects/home-org/helm/ho
 
 ```yaml
 image:
-  repository: ghcr.io/ryancbutler/home-org
-  tag: "0.1.0"
+  repository: butlerrc30/homeboard
+  tag: "v0.2.1"
   pullPolicy: IfNotPresent
 
 replicaCount: 2

@@ -4,3 +4,4 @@ metadata:
   name: {{ include "homeboard.fullname" . }}
 data:
   NEXT_PUBLIC_APP_NAME: {{ .Values.config.appName | quote }}
+  ALLOW_DEMO: {{ .Values.config.allowDemo | quote }}

@@ -2,7 +2,10 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "homeboard.fullname" . }}-migrate-{{ .Release.Revision }}
-  annotations: { "helm.sh/hook": pre-install,pre-upgrade, "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded }
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
 spec:
   template:
     spec:
