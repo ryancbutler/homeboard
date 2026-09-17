@@ -10,8 +10,9 @@ spec:
     spec:
       containers:
         - name: worker
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          command: ["node", "node_modules/tsx/dist/cli.mjs", "src/worker.ts"]
+          image: "{{ .Values.image.repository }}:{{ default (printf "%s-tools" .Values.image.tag) .Values.image.toolsTag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "dist/src/worker.js"]
           envFrom: [{ configMapRef: { name: {{ include "homeboard.fullname" . }} } }]
           env:
             - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.secrets.databaseUrlKey }} } } }

@@ -14,7 +14,15 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM base AS runtime
+FROM build AS tools-build
+RUN npm run build:tools
+
+FROM base AS production-dependencies
+WORKDIR /app
+COPY package.json package-lock.json* .npmrc ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+FROM base AS runtime-web
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
@@ -22,11 +30,16 @@ RUN addgroup -S homeboard && adduser -S homeboard -G homeboard
 COPY --from=build --chown=homeboard:homeboard /app/public ./public
 COPY --from=build --chown=homeboard:homeboard /app/.next/standalone ./
 COPY --from=build --chown=homeboard:homeboard /app/.next/static ./.next/static
-COPY --from=build --chown=homeboard:homeboard /app/db ./db
-COPY --from=build --chown=homeboard:homeboard /app/scripts ./scripts
-COPY --from=build --chown=homeboard:homeboard /app/src ./src
-COPY --from=build --chown=homeboard:homeboard /app/tsconfig.json ./tsconfig.json
-COPY --from=build --chown=homeboard:homeboard /app/node_modules ./node_modules
 USER homeboard
 EXPOSE 3000
 CMD ["node", "server.js"]
+
+FROM base AS runtime-tools
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup -S homeboard && adduser -S homeboard -G homeboard
+COPY --from=production-dependencies --chown=homeboard:homeboard /app/node_modules/@node-rs ./node_modules/@node-rs
+COPY --from=tools-build --chown=homeboard:homeboard /app/dist ./dist
+COPY --from=build --chown=homeboard:homeboard /app/db ./db
+USER homeboard
+CMD ["node", "dist/src/worker.js"]

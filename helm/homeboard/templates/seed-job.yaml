@@ -13,8 +13,9 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: seed
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          command: ["node", "node_modules/tsx/dist/cli.mjs", "scripts/seed.ts"]
+          image: "{{ .Values.image.repository }}:{{ default (printf "%s-tools" .Values.image.tag) .Values.image.toolsTag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "dist/scripts/seed.js"]
           env:
             - name: DATABASE_URL
               valueFrom:

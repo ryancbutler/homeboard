@@ -12,6 +12,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "build:tools": "esbuild scripts/migrate.ts scripts/seed.ts src/worker.ts --bundle --platform=node --format=esm --outdir=dist --external:@node-rs/argon2",
     "worker": "tsx src/worker.ts",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -32,6 +33,7 @@
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

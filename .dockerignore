@@ -1,6 +1,7 @@
 # Dependencies and generated output are recreated inside the image.
 node_modules
 .next
+dist
 coverage
 *.tsbuildinfo
 

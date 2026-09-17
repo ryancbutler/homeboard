@@ -86,13 +86,36 @@ jobs:
         if: steps.release.outputs.created == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image
+      - name: Set tooling image metadata
+        if: steps.release.outputs.created == 'true'
+        id: tooling-metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: butlerrc30/homeboard
+          tags: |
+            type=raw,value=v${{ steps.version.outputs.value }}-tools
+            type=raw,value=${{ steps.version.outputs.value }}-tools
+
+      - name: Build and push web image
         if: steps.release.outputs.created == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime-web
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Build and push tooling image
+        if: steps.release.outputs.created == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime-tools
+          push: true
+          tags: ${{ steps.tooling-metadata.outputs.tags }}
+          labels: ${{ steps.tooling-metadata.outputs.labels }}
+          cache-from: type=gha,scope=tools
+          cache-to: type=gha,mode=max,scope=tools
