@@ -1,15 +1,20 @@
-FROM node:22-alpine AS dependencies
+ARG NODE_VERSION=24.21.0
+
+FROM node:${NODE_VERSION}-alpine AS base
+RUN npm install --global npm@12.0.2 && npm --version
+
+FROM base AS dependencies
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* .npmrc ./
 RUN npm ci
 
-FROM node:22-alpine AS build
+FROM base AS build
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:22-alpine AS runtime
+FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0

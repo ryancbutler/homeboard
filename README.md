@@ -90,6 +90,13 @@ graph TD
 ## 🚀 Quick Start (Local Development)
 
 ### 1. Clone and Install Dependencies
+Use Node.js 24.21.0 LTS and npm 12.0.2. With nvm:
+```bash
+nvm install
+nvm use
+```
+
+Then install dependencies:
 ```bash
 npm install
 ```
@@ -186,8 +193,8 @@ Customize [`helm/homeboard/values.yaml`](file:///d:/gitprojects/home-org/helm/ho
 
 ```yaml
 image:
-  repository: ghcr.io/your-org/homeboard
-  tag: "latest"
+  repository: ghcr.io/ryancbutler/home-org
+  tag: "0.1.0"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
