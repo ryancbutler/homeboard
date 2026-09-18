@@ -32,7 +32,7 @@ jobs:
 
       - name: Set image metadata
         id: metadata
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             butlerrc30/homeboard
@@ -46,7 +46,7 @@ jobs:
 
       - name: Set tooling image metadata
         id: tooling-metadata
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             butlerrc30/homeboard
