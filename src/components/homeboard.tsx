@@ -82,8 +82,8 @@ const CONFETTI = Array.from({ length: 144 }, (_, index) => index);
 const choreBelongsTo = (chore: DashboardData["chores"][number], childId: string) =>
   chore.assignee?.id === childId || (!chore.assignee && chore.allowedChildren.some((child) => child.id === childId));
 
-export function Homeboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
+export function Homeboard({ initialData }: { initialData: DashboardData }) {
+  const [data, setData] = useState<DashboardData | null>(initialData);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
@@ -122,7 +122,6 @@ export function Homeboard() {
   }, []);
 
   useEffect(() => {
-    void refresh();
     const timer = window.setInterval(() => void refresh(), 30_000);
     const wake = () => void refresh();
     const disconnect = () => setOffline(true);
