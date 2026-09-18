@@ -39,7 +39,8 @@ PRs should explain the change, list verification commands, and include screensho
 1. Choose an immutable patch version and update `package.json`, `package-lock.json`, `helm/homeboard/Chart.yaml`, and `helm/homeboard/values.yaml` together.
 2. Open a release PR. It must pass `npm test`, `npx tsc --noEmit`, `npm run build`, Docker Compose validation, and Helm lint/template checks.
 3. Merge the release PR into `main`, check out the updated `main` branch, and create the matching GitHub release/tag only from `main`. Never create release tags from a feature or documentation branch. Publish `butlerrc30/homeboard:vX.Y.Z` and `:vX.Y.Z-tools` from that tagged commit.
-4. Upgrade production without replacing its namespace-specific configuration:
+4. Publish `butlerrc30/homeboard:vX.Y.Z` and `:vX.Y.Z-tools`, then create the matching GitHub release/tag from its commit.
+5. Upgrade production without replacing its namespace-specific configuration:
 
    `helm upgrade homeboard ./helm/homeboard --namespace homeboard --reuse-values --set image.tag=vX.Y.Z --set image.toolsTag=vX.Y.Z-tools --wait --timeout 10m`
 
