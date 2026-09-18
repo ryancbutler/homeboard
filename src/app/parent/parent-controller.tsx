@@ -2,10 +2,11 @@
 
 import { createContext, FormEvent, ReactNode, useContext, useMemo, useRef, useState } from "react";
 import type { DashboardData } from "@/lib/dashboard";
-import { dateInTimezone } from "@/lib/dates";
 import { CHORE_ICONS, resolveTaskIcon } from "@/lib/icons";
-
-type Member = { id: string; role: string; displayName: string; email: string | null; color: string; active: boolean };
+import { ChoreTemplate, useChoreManagement } from "./use-chore-management";
+import { RoutineTemplate, useRoutineManagement } from "./use-routine-management";
+import type { ChoreGroup, ChoreGroupRotation, Member } from "./parent-types";
+import { useGroupManagement } from "./use-group-management";
 
 type ReportRow = {
   obligation_id: string;
@@ -47,50 +48,6 @@ type Report = {
   rows: ReportRow[];
 };
 
-type ChoreGroup = { id: string; name: string; assignedMemberId: string | null; assignedMemberName: string; templateCount: number };
-type ChoreGroupRotation = {
-  id: string;
-  startDate: string;
-  firstGroup: { id: string; name: string };
-  secondGroup: { id: string; name: string };
-  firstMember: { id: string; name: string };
-  secondMember: { id: string; name: string };
-  current: { firstGroupMemberId: string | null; secondGroupMemberId: string | null };
-  next: { firstGroupMemberId: string | null; secondGroupMemberId: string | null };
-};
-
-type ChoreTemplate = {
-  id: string;
-  title: string;
-  instructions: string | null;
-  icon: string | null;
-  assignmentPolicy: "individual" | "any" | "every";
-  approvalRequired: boolean;
-  isFlexible: boolean;
-  scheduleKind: string;
-  startDate: string;
-  dueTime: string | null;
-  nextScheduledFor: string | null;
-  weekdays: number[];
-  active: boolean;
-  groupId: string | null;
-  assigneeIds: string[];
-};
-
-type RoutineTemplate = {
-  id: string;
-  title: string;
-  icon: string | null;
-  assignmentPolicy: string;
-  scheduleKind: string;
-  startDate: string;
-  dueTime: string | null;
-  weekdays: number[];
-  steps: { id: string; position: number; title: string; icon: string | null }[];
-  assignees: { id: string; name: string }[];
-};
-type RoutineStepDraft = { title: string; icon: string };
-
 type NavTab = "approvals" | "chores" | "routines" | "groups" | "family" | "settings";
 
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -98,13 +55,6 @@ const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const formatScheduledDate = (date: string | null) => date
   ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`))
   : "No upcoming instance";
-
-const nextMonday = () => {
-  const value = new Date();
-  const days = (8 - value.getDay()) % 7 || 7;
-  value.setDate(value.getDate() + days);
-  return value.toISOString().slice(0, 10);
-};
 
 const formatHistorySchedule = (row: ReportRow) => {
   if (row.rescheduled_for) return `Rescheduled to ${formatScheduledDate(row.rescheduled_for)}`;
@@ -114,23 +64,6 @@ const formatHistorySchedule = (row: ReportRow) => {
   if (row.schedule_kind === "once") return `One time · ${formatScheduledDate(row.scheduled_for)}`;
   return `Weekly · ${formatScheduledDate(row.scheduled_for)}`;
 };
-
-const matchingIcons = (filter: string) => {
-  const query = filter.trim().toLowerCase();
-  if (!query) return CHORE_ICONS;
-  return CHORE_ICONS.filter((icon) =>
-    icon.id.toLowerCase().includes(query) ||
-    icon.label.toLowerCase().includes(query) ||
-    icon.category?.toLowerCase().includes(query) ||
-    icon.keywords?.some((keyword) => keyword.toLowerCase().includes(query))
-  );
-};
-
-const formSchedule = (kind: string, weekdays: number[], timezone: string) => ({
-  kind,
-  startDate: dateInTimezone(new Date(), timezone),
-  weekdays: kind === "weekly" ? (weekdays.length ? weekdays : [1]) : kind === "weekdays" ? [1, 2, 3, 4, 5] : []
-});
 
 const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
@@ -149,47 +82,15 @@ function useParentController() {
   const [report, setReport] = useState<Report | null>(null);
   const [groups, setGroups] = useState<ChoreGroup[]>([]);
   const [rotations, setRotations] = useState<ChoreGroupRotation[]>([]);
-  const [rotationFirstGroupId, setRotationFirstGroupId] = useState("");
-  const [rotationSecondGroupId, setRotationSecondGroupId] = useState("");
-  const [rotationFirstMemberId, setRotationFirstMemberId] = useState("");
-  const [rotationSecondMemberId, setRotationSecondMemberId] = useState("");
-  const [rotationStartDate, setRotationStartDate] = useState(nextMonday);
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [groupNameInput, setGroupNameInput] = useState("");
   const [choreTemplates, setChoreTemplates] = useState<ChoreTemplate[]>([]);
   const [routineTemplates, setRoutineTemplates] = useState<RoutineTemplate[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  // Chore form state
-  const [editingChore, setEditingChore] = useState<ChoreTemplate | null>(null);
-  const [choreTitleInput, setChoreTitleInput] = useState("");
-  const [choreIcon, setChoreIcon] = useState("");
-  const [choreIconFilter, setChoreIconFilter] = useState("");
-  const [choreScheduleKind, setChoreScheduleKind] = useState("daily");
-  const [choreWeekdays, setChoreWeekdays] = useState<number[]>([1]);
-  const [choreIsFlexible, setChoreIsFlexible] = useState(false);
-  const [choreSelectedGroupId, setChoreSelectedGroupId] = useState("");
-  const [choreAssigneeIds, setChoreAssigneeIds] = useState<string[]>([]);
-  const [chorePolicy, setChorePolicy] = useState<"individual" | "any" | "every">("individual");
-  const [choreApprovalRequired, setChoreApprovalRequired] = useState(false);
-
-  const filteredChoreIcons = useMemo(() => matchingIcons(choreIconFilter), [choreIconFilter]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Routine form state
-  const [editingRoutine, setEditingRoutine] = useState<RoutineTemplate | null>(null);
-  const [routineScheduleKind, setRoutineScheduleKind] = useState("daily");
-  const [routineWeekdays, setRoutineWeekdays] = useState<number[]>([1]);
-  const [routineTitleInput, setRoutineTitleInput] = useState("");
-  const [routineIcon, setRoutineIcon] = useState("");
-  const [routineIconFilter, setRoutineIconFilter] = useState("");
-  const [routineAssigneeIds, setRoutineAssigneeIds] = useState<string[]>([]);
-  const [routineSteps, setRoutineSteps] = useState<RoutineStepDraft[]>([{ title: "", icon: "" }, { title: "", icon: "" }, { title: "", icon: "" }]);
-  const filteredRoutineIcons = useMemo(() => matchingIcons(routineIconFilter), [routineIconFilter]);
 
   // History filtering & sorting state
   const [historyChildFilter, setHistoryChildFilter] = useState("all");
@@ -226,6 +127,22 @@ function useParentController() {
     finally { setBusy(null); }
   };
 
+  const chores = useChoreManagement({
+    perform,
+    request,
+    setNotice,
+    timezone: dashboard?.household.timezone ?? "America/Chicago",
+    selectChores: () => setActiveTab("chores")
+  });
+  const routines = useRoutineManagement({
+    perform,
+    request,
+    setNotice,
+    timezone: dashboard?.household.timezone ?? "America/Chicago",
+    selectRoutines: () => setActiveTab("routines")
+  });
+  const groupManagement = useGroupManagement({ perform, request, setNotice });
+
   const handleUnlock = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPinError("");
@@ -257,231 +174,6 @@ function useParentController() {
     void perform(`delete-child-${childId}`, async () => {
       await request(`/api/v1/members/${childId}`, { method: "DELETE" });
       setNotice(`${name} has been removed.`);
-    });
-  };
-
-  // Chore handlers
-  const startEditChore = (chore: ChoreTemplate) => {
-    setEditingChore(chore);
-    setChoreTitleInput(chore.title);
-    setChoreIcon(chore.icon ?? "");
-    setChoreIconFilter("");
-    setChoreScheduleKind(chore.scheduleKind);
-    setChoreWeekdays(chore.weekdays?.length ? chore.weekdays : [1]);
-    setChoreIsFlexible(chore.isFlexible ?? false);
-    setChoreSelectedGroupId(chore.groupId ?? "");
-    setChoreAssigneeIds(chore.assigneeIds ?? []);
-    setChorePolicy(chore.assignmentPolicy);
-    setChoreApprovalRequired(chore.approvalRequired ?? false);
-    setActiveTab("chores");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const cancelEditChore = () => {
-    setEditingChore(null);
-    setChoreTitleInput("");
-    setChoreIcon("");
-    setChoreIconFilter("");
-    setChoreScheduleKind("daily");
-    setChoreWeekdays([1]);
-    setChoreIsFlexible(false);
-    setChoreSelectedGroupId("");
-    setChoreAssigneeIds([]);
-    setChorePolicy("individual");
-    setChoreApprovalRequired(false);
-  };
-
-  const saveChore = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const element = event.currentTarget;
-    const form = new FormData(element);
-    const schedule = choreScheduleKind;
-    const title = String(form.get("title"));
-    const instructions = form.get("instructions") ? String(form.get("instructions")) : undefined;
-    const approvalRequired = choreApprovalRequired;
-    // `null` is meaningful on PATCH: it removes an existing group assignment.
-    const groupId = choreSelectedGroupId || null;
-
-    // Auto-resolve policy
-    let policy = chorePolicy;
-    if (choreAssigneeIds.length > 1 && policy === "individual") {
-      policy = "every";
-    } else if (choreAssigneeIds.length === 1) {
-      policy = "individual";
-    } else if (choreAssigneeIds.length === 0) {
-      policy = "any";
-    }
-
-    void perform("chore-save", async () => {
-      const payload = {
-        title,
-        instructions,
-        icon: choreIcon || null,
-        assignmentPolicy: policy,
-        approvalRequired,
-        isFlexible: schedule === "weekly" ? choreIsFlexible : false,
-        assigneeIds: choreAssigneeIds,
-        groupId,
-        schedule: formSchedule(schedule, choreWeekdays, dashboard?.household.timezone ?? "America/Chicago")
-      };
-
-      if (editingChore) {
-        await request(`/api/v1/chore-templates/${editingChore.id}`, { method: "PATCH", body: JSON.stringify(payload) });
-        setNotice(`Chore "${title}" updated.`);
-      } else {
-        await request("/api/v1/chore-templates", { method: "POST", body: JSON.stringify(payload) });
-        setNotice(`Chore "${title}" created and scheduled.`);
-      }
-      cancelEditChore();
-      element.reset();
-    });
-  };
-
-  const deleteChore = (id: string, title: string) => {
-    if (!window.confirm(`Delete chore "${title}"? This will remove all open and upcoming copies.`)) return;
-    void perform(`del-chore-${id}`, async () => {
-      await request(`/api/v1/chore-templates/${id}`, { method: "DELETE" });
-      setNotice(`Chore "${title}" deleted.`);
-    });
-  };
-
-  // Routine handlers
-  const startEditRoutine = (routine: RoutineTemplate) => {
-    setEditingRoutine(routine);
-    setRoutineTitleInput(routine.title);
-    setRoutineScheduleKind(routine.scheduleKind);
-    setRoutineWeekdays(routine.weekdays?.length ? routine.weekdays : [1]);
-    setRoutineIcon(routine.icon ?? "");
-    setRoutineIconFilter("");
-    setRoutineAssigneeIds(routine.assignees.map((a) => a.id));
-    setRoutineSteps(routine.steps.length ? routine.steps.map((s) => ({ title: s.title, icon: s.icon ?? "" })) : [{ title: "", icon: "" }]);
-    setActiveTab("routines");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const cancelEditRoutine = () => {
-    setEditingRoutine(null);
-    setRoutineTitleInput("");
-    setRoutineScheduleKind("daily");
-    setRoutineWeekdays([1]);
-    setRoutineIcon("");
-    setRoutineIconFilter("");
-    setRoutineAssigneeIds([]);
-    setRoutineSteps([{ title: "", icon: "" }, { title: "", icon: "" }, { title: "", icon: "" }]);
-  };
-
-  const saveRoutine = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const element = event.currentTarget;
-    const form = new FormData(element);
-    const title = String(form.get("routineTitle"));
-    const validSteps = routineSteps
-      .map((step) => ({ title: step.title.trim(), icon: step.icon || null }))
-      .filter((step) => Boolean(step.title));
-
-    if (!validSteps.length) {
-      setNotice("Please add at least one step for this routine.");
-      return;
-    }
-
-    void perform("routine-save", async () => {
-      const payload = {
-        title,
-        icon: routineIcon || null,
-        assigneeIds: routineAssigneeIds,
-        steps: validSteps,
-        schedule: formSchedule(routineScheduleKind, routineWeekdays, dashboard?.household.timezone ?? "America/Chicago")
-      };
-
-      if (editingRoutine) {
-        await request(`/api/v1/routine-templates/${editingRoutine.id}`, { method: "PATCH", body: JSON.stringify(payload) });
-        setNotice(`Routine "${title}" updated.`);
-      } else {
-        await request("/api/v1/routine-templates", { method: "POST", body: JSON.stringify(payload) });
-        setNotice(`Routine "${title}" created.`);
-      }
-      cancelEditRoutine();
-      element.reset();
-    });
-  };
-
-  const deleteRoutine = (id: string, title: string) => {
-    if (!window.confirm(`Delete routine "${title}"?`)) return;
-    void perform(`del-routine-${id}`, async () => {
-      await request(`/api/v1/routine-templates/${id}`, { method: "DELETE" });
-      setNotice(`Routine "${title}" deleted.`);
-    });
-  };
-
-  // Group handlers
-  const createGroup = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const element = event.currentTarget;
-    const form = new FormData(element);
-    void perform("group", async () => {
-      await request("/api/v1/chore-groups", { method: "POST", body: JSON.stringify({ name: form.get("groupName") }) });
-      element.reset(); setNotice("Chore group created. You can assign a child below.");
-    });
-  };
-
-  const switchGroup = (groupId: string, memberId: string) => void perform(groupId, async () => {
-    await request(`/api/v1/chore-groups/${groupId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ assignedMemberId: memberId || null })
-    });
-    setNotice(memberId ? "Group assignment updated for open chores." : "Child removed from group.");
-  });
-
-  const createRotation = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void perform("rotation", async () => {
-      await request("/api/v1/chore-group-rotations", {
-        method: "POST",
-        body: JSON.stringify({
-          firstGroupId: rotationFirstGroupId,
-          secondGroupId: rotationSecondGroupId,
-          firstMemberId: rotationFirstMemberId,
-          secondMemberId: rotationSecondMemberId,
-          startDate: rotationStartDate
-        })
-      });
-      setNotice("Weekly group rotation scheduled. Future chores will alternate automatically.");
-    });
-  };
-
-  const stopRotation = (rotation: ChoreGroupRotation) => {
-    if (!window.confirm(`Stop the rotation between ${rotation.firstGroup.name} and ${rotation.secondGroup.name}?`)) return;
-    void perform(`stop-rotation-${rotation.id}`, async () => {
-      await request(`/api/v1/chore-group-rotations/${rotation.id}`, { method: "DELETE" });
-      setNotice("Group rotation stopped. Each group keeps this week's child.");
-    });
-  };
-
-  const startRenameGroup = (group: ChoreGroup) => {
-    setEditingGroupId(group.id);
-    setGroupNameInput(group.name);
-  };
-
-  const saveGroupName = (event: FormEvent<HTMLFormElement>, group: ChoreGroup) => {
-    event.preventDefault();
-    const name = groupNameInput.trim();
-    if (!name) return;
-    if (name === group.name) {
-      setEditingGroupId(null);
-      return;
-    }
-    void perform(`rename-group-${group.id}`, async () => {
-      await request(`/api/v1/chore-groups/${group.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
-      setEditingGroupId(null);
-      setNotice(`Group renamed to "${name}".`);
-    });
-  };
-
-  const deleteGroup = (groupId: string, name: string) => {
-    if (!window.confirm(`Delete group "${name}"? Existing chores will remain without a group.`)) return;
-    void perform(`del-group-${groupId}`, async () => {
-      await request(`/api/v1/chore-groups/${groupId}`, { method: "DELETE" });
-      setNotice(`Group "${name}" deleted.`);
     });
   };
 
@@ -662,68 +354,19 @@ function useParentController() {
     members,
     groups,
     rotations,
-    rotationFirstGroupId,
-    setRotationFirstGroupId,
-    rotationSecondGroupId,
-    setRotationSecondGroupId,
-    rotationFirstMemberId,
-    setRotationFirstMemberId,
-    rotationSecondMemberId,
-    setRotationSecondMemberId,
-    rotationStartDate,
-    setRotationStartDate,
-    editingGroupId,
-    setEditingGroupId,
-    groupNameInput,
-    setGroupNameInput,
+    ...groupManagement,
     choreTemplates,
     routineTemplates,
     dashboard,
     notice,
     busy,
-    editingChore,
-    choreTitleInput,
-    setChoreTitleInput,
-    choreIcon,
-    setChoreIcon,
-    choreIconFilter,
-    setChoreIconFilter,
-    choreScheduleKind,
-    setChoreScheduleKind,
-    choreWeekdays,
-    setChoreWeekdays,
-    choreIsFlexible,
-    setChoreIsFlexible,
-    choreSelectedGroupId,
-    setChoreSelectedGroupId,
-    choreAssigneeIds,
-    setChoreAssigneeIds,
-    chorePolicy,
-    setChorePolicy,
-    choreApprovalRequired,
-    setChoreApprovalRequired,
-    filteredChoreIcons,
+    ...chores,
+    ...routines,
     importFile,
     setImportFile,
     dragOver,
     setDragOver,
     fileInputRef,
-    editingRoutine,
-    routineScheduleKind,
-    setRoutineScheduleKind,
-    routineWeekdays,
-    setRoutineWeekdays,
-    routineTitleInput,
-    setRoutineTitleInput,
-    routineIcon,
-    setRoutineIcon,
-    routineIconFilter,
-    setRoutineIconFilter,
-    routineAssigneeIds,
-    setRoutineAssigneeIds,
-    routineSteps,
-    setRoutineSteps,
-    filteredRoutineIcons,
     historyChildFilter,
     setHistoryChildFilter,
     historyStatusFilter,
@@ -740,21 +383,6 @@ function useParentController() {
     handleUnlock,
     addChild,
     deleteChild,
-    startEditChore,
-    cancelEditChore,
-    saveChore,
-    deleteChore,
-    startEditRoutine,
-    cancelEditRoutine,
-    saveRoutine,
-    deleteRoutine,
-    createGroup,
-    switchGroup,
-    createRotation,
-    stopRotation,
-    startRenameGroup,
-    saveGroupName,
-    deleteGroup,
     review,
     undoChore,
     openReschedule,
