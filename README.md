@@ -239,6 +239,37 @@ helm upgrade --install homeboard ./helm/homeboard \
 > [!NOTE]
 > The Helm chart includes a pre-install and pre-upgrade `Job` ([`migrate-job.yaml`](file:///d:/gitprojects/home-org/helm/homeboard/templates/migrate-job.yaml)) that executes database schema migrations before new pods are rolled out.
 
+#### 5. Maintainer Release and Deployment Workflow
+
+Use an immutable version tag for every production rollout. From a release branch:
+
+1. Update the version in `package.json`, `package-lock.json`, `helm/homeboard/Chart.yaml`, and `helm/homeboard/values.yaml`.
+2. Open a pull request and wait for the application and deployment validation checks to pass.
+3. Merge the pull request. The `release.yml` workflow creates the GitHub release and publishes both images:
+   - `butlerrc30/homeboard:vX.Y.Z`
+   - `butlerrc30/homeboard:vX.Y.Z-tools`
+4. Upgrade the cluster using the production values file, explicitly setting both image tags:
+
+```bash
+helm upgrade homeboard ./helm/homeboard \
+  --namespace homeboard \
+  --values helm-values.yaml \
+  --set image.tag=vX.Y.Z \
+  --set image.toolsTag=vX.Y.Z-tools \
+  --wait --timeout 10m
+```
+
+Verify the release and workloads before considering the deployment complete:
+
+```bash
+helm status homeboard --namespace homeboard
+kubectl rollout status deployment/homeboard-homeboard --namespace homeboard --timeout=120s
+kubectl rollout status deployment/homeboard-homeboard-worker --namespace homeboard --timeout=120s
+kubectl get pods --namespace homeboard -l app.kubernetes.io/name=homeboard
+```
+
+Do not reuse an existing image tag: production uses `IfNotPresent`, so a rebuilt image with the same tag may remain cached on a node.
+
 ---
 
 ## 🔐 Parent PIN Recovery & Reset
