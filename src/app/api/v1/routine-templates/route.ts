@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireContext } from "@/lib/auth";
 import { apiError } from "@/lib/http";
 import { materializeRoutines } from "@/lib/recurrence";
+import { scheduleSchema } from "@/lib/schedule-validation";
 
 const routineStepSchema = z.union([
   z.string().trim().min(1).max(120).transform((title) => ({ title, icon: null })),
@@ -14,12 +15,7 @@ const schema = z.object({
   title: z.string().trim().min(1).max(120),
   icon: z.string().trim().max(50).nullable().optional(),
   assigneeIds: z.array(z.string().uuid()).default([]),
-  schedule: z.object({
-    kind: z.enum(["once", "daily", "weekdays", "weekly"]),
-    startDate: z.string(),
-    dueTime: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-    weekdays: z.array(z.number().int().min(0).max(6)).default([])
-  }),
+  schedule: scheduleSchema,
   steps: z.array(routineStepSchema).min(1).max(20)
 });
 

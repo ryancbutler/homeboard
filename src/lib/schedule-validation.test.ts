@@ -14,4 +14,13 @@ describe("schedule validation", () => {
     expect(scheduleSchema.safeParse({ ...base, kind: "weekdays" }).success).toBe(false);
     expect(scheduleSchema.safeParse({ ...base, kind: "weekdays", weekdays: [1, 3] }).success).toBe(true);
   });
+
+  it("accepts an omitted or cleared due time", () => {
+    expect(scheduleSchema.safeParse({ ...base, kind: "daily", dueTime: null }).success).toBe(true);
+    expect(scheduleSchema.safeParse({ ...base, kind: "daily" }).success).toBe(true);
+  });
+
+  it("rejects an invalid start date", () => {
+    expect(scheduleSchema.safeParse({ ...base, kind: "daily", startDate: "tomorrow" }).success).toBe(false);
+  });
 });

@@ -2,5 +2,5 @@ apiVersion: v2
 name: homeboard
 description: Home organization dashboard for a shared household display
 type: application
-version: 0.2.16
-appVersion: "0.2.16"
+version: 0.2.17
+appVersion: "0.2.17"
