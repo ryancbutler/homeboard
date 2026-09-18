@@ -1,379 +1,204 @@
-# 🏠 Homeboard
+# Homeboard
 
-> **A portrait-first family organization dashboard and chore management hub.**  
-> Built for smart refrigerator displays (e.g. Samsung Family Hub), wall-mounted tablets, desktop browsers, and mobile phones.
+Homeboard is a portrait-first household dashboard and chore manager for shared displays, tablets, desktops, and phones. Children can follow routines and complete chores; parents can manage the household from a PIN-protected console.
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat&logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)](https://react.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker)](https://www.docker.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm-326CE5?style=flat&logo=kubernetes)](https://helm.sh/)
 
----
+<img src="public/screenshots/dashboard.png" alt="Seeded Homeboard dashboard showing chore progress and each child's to-do list" width="720">
 
-## 📑 Table of Contents
+## Features
 
-- [🌟 Overview](#-overview)
-- [✨ Core Features](#-core-features)
-  - [📋 Chores & Flexible Scheduling](#-chores--flexible-scheduling)
-  - [🔁 Morning & Evening Routines](#-morning--evening-routines)
-  - [👨‍👩‍👧‍👦 Parent Console & Approvals](#-parent-console--approvals)
-  - [📊 Reports & Streak Tracking](#-reports--streak-tracking)
-- [🏗️ Architecture & Technology Stack](#️-architecture--technology-stack)
-- [🚀 Quick Start (Local Development)](#-quick-start-local-development)
-- [🐳 Deployment Guide](#-deployment-guide)
-  - [Option A: Docker Compose (Recommended for Self-Hosting)](#option-a-docker-compose-recommended-for-self-hosting)
-  - [Option B: Kubernetes via Helm](#option-b-kubernetes-via-helm)
-- [🔐 Parent PIN Recovery & Reset](#-parent-pin-recovery--reset)
-  - [How the PIN Works](#how-the-pin-works)
-  - [Reset Method 1: Database Reset (Quickest)](#reset-method-1-database-reset-quickest)
-  - [Reset Method 2: Change PIN from Parent Console](#reset-method-2-change-pin-from-parent-console)
-  - [Reset Method 3: Demo Mode Access](#reset-method-3-demo-mode-access)
-- [🧪 Testing & Health Verification](#-testing--health-verification)
-- [📁 Project Layout](#-project-layout)
+- Schedule chores once, daily, on weekdays, or on selected days of the week.
+- Assign chores to one child, every selected child, or any child; organize related chores into groups and rotate two groups weekly between two children.
+- Set due times, mark missed chores automatically, and require parent approval when needed.
+- Create repeatable, step-by-step routines.
+- View completion reports and export them as CSV.
+- Export and import household setup, including children, groups, rotations, chores, and routines. Completion history is not imported or overwritten.
+- Keep an audit trail for key household-management actions.
 
----
-
-## 🌟 Overview
-
-**Homeboard** transforms shared household screens into an intuitive command center for kids and parents. It replaces scattered paper chore charts, whiteboard lists, and fridge magnets with an interactive, portrait-optimized touch experience.
-
-Kids can easily check off daily obligations, follow step-by-step routines, and track their progress. Parents get a secure, PIN-protected management console to schedule chores, organize chore groups, review pending approvals, and analyze completion reports.
-
----
-
-## ✨ Core Features
-
-### 📋 Chores & Flexible Scheduling
-- **Custom Cadences:** Schedule chores daily, on weekdays, weekends, or specific days of the week (e.g., Monday/Wednesday/Friday trash and laundry).
-- **Flexible Assignment Policies:**
-  - *Individual:* Assigned to one specific child.
-  - *Shared / Any:* Available for any child to claim and complete.
-  - *Rotating:* Cycle responsibility among children automatically.
-- **Chore Groups:** Bundle related chores (e.g. "Morning Kitchen Duty" or "Pet Care"). Reassigning a chore group to a different child immediately updates all open chores from today forward while preserving past completion history for the previous child.
-- **Due Times & Overdue Tracking:** Set specific completion targets (e.g., `18:00`) with automated status tracking.
-
-### 🔁 Morning & Evening Routines
-- **Step-by-Step Checklists:** Guide children through daily workflows (e.g., *"Put backpack away"*, *"Place lunchbox by sink"*, *"Finish homework check-in"*).
-- **Interactive Checkoffs:** Visual, multi-step progress bar on the kiosk display.
-- **Repeatable Templates:** Automatically recreated daily or on weekdays by the background worker.
-
-### 👨‍👩‍👧‍👦 Parent Console & Approvals
-- **PIN-Protected Parent Mode:** Accessible right from the fridge kiosk using a 4+ digit PIN.
-- **Approval Workflow:** Chores can optionally require parent verification before being marked as fully approved.
-- **Household Management:** Add and manage family members, custom display colors, avatars, and timezones.
-- **Complete Audit Trail:** Audit logs track every creation, assignment, checkoff, and approval.
-
-### 📊 Reports & Streak Tracking
-- **Completion Rates:** Real-time analytics breaking down completed, pending, and missed obligations.
-- **Historical Analysis:** Filter reports across custom date ranges and individual children.
-- **Data Portability:** Export or import household setup—family members, groups, chore templates, and routines—as JSON. Completion history stays in the household and is not overwritten by imports.
-
----
-
-## 🏗️ Architecture & Technology Stack
+## Architecture
 
 ```mermaid
 graph TD
-  User[Kiosk Display / Tablet / Phone / Desktop] -->|HTTP / API| Web[Next.js 15 Web App]
-  Web -->|PostgreSQL Wire| DB[(PostgreSQL 16)]
-  Worker[Background Worker] -->|Materialize Schedules & Overdue| DB
+  User[Shared display, tablet, phone, or desktop] --> Web[Next.js 16 application]
+  Web --> DB[(PostgreSQL 16)]
+  Worker[Background worker] --> DB
 ```
 
-- **Frontend & App Framework:** Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Lucide Icons.
-- **Database:** PostgreSQL 16 utilizing raw SQL migrations and fast connection pooling (`postgres.js`).
-- **Background Worker:** `src/worker.ts` runs on a 5-minute schedule to materialize recurring daily/weekly chores and routines, and mark overdue obligations.
-- **Security & Cryptography:** Argon2id hash verification (`@node-rs/argon2`) for parent PINs and passwords; AES/SHA-256 for sessions and credentials.
+- Next.js 16 App Router, React 19, TypeScript, and Tailwind CSS power the web application.
+- PostgreSQL stores household data; ordered raw-SQL migrations live in `db/migrations/`.
+- `src/worker.ts` runs once at startup, then every five minutes to materialize schedules and mark overdue chores as missed.
+- Parent PINs and seeded demo passwords use Argon2id hashes. Browser session tokens are stored as SHA-256 digests.
 
----
+## Local development
 
-## 🚀 Quick Start (Local Development)
+### Prerequisites
 
-### 1. Clone and Install Dependencies
-Use Node.js 24.21.0 LTS and npm 12.0.2. With nvm:
+- Node.js 24.21.x and npm 12.x (see `.nvmrc` and `package.json`)
+- A running PostgreSQL 16 database
+
+Install the locked dependency set and configure the database:
+
 ```bash
 nvm install
 nvm use
-```
-
-Then install dependencies:
-```bash
-npm install
-```
-
-### 2. Configure Environment
-Copy `.env.example` to `.env.local`:
-```bash
+npm ci
 cp .env.example .env.local
 ```
-Provide a running PostgreSQL database connection string in `DATABASE_URL`.
 
-### 3. Run Database Migrations and Seed
+Set `DATABASE_URL` in `.env.local` to the connection string for your local database. The example points to a PostgreSQL instance at `localhost:5432` with database, user, and password all set to `homeorg`.
+
+Apply migrations, then start the app and scheduler in separate terminals:
+
 ```bash
 npm run db:migrate
+npm run dev
+```
+
+```bash
+npm run worker
+```
+
+Open `http://localhost:3000`. With an empty database, Homeboard presents the first-run setup flow, where you create the household and its 4–20 digit parent PIN.
+
+### Optional demo data
+
+The seed script creates the Johnson demo household, three children, sample chores, and a routine. It requires `PARENT_PIN` or `INITIAL_PIN` in addition to `DATABASE_URL`:
+
+```bash
+# PowerShell
+$env:PARENT_PIN = "1234"
 npm run db:seed
 ```
 
-### 4. Start Development Server & Background Worker
-In separate terminals:
-```bash
-# Web application
-npm run dev
+The seeded parent account is `parent@example.com` with password `homeboard-demo`; the current UI unlocks Parent mode with the household PIN. Do not use these credentials outside local development.
 
-# Background recurrence scheduler worker
-npm run worker
-```
-Access the dashboard at `http://localhost:3000`.
+## Docker Compose demo stack
 
----
+`docker-compose.yml` is a ready-to-run local demo stack. It creates PostgreSQL data in the `postgres-data` volume, runs migrations and the seed job, exposes the app on port 3000, and starts the worker.
 
-## 🐳 Deployment Guide
-
-### Option A: Docker Compose (Recommended for Self-Hosting)
-
-Docker Compose provides a complete, turnkey deployment including PostgreSQL, automated migrations, database seeding (optional), the web application, and the background worker.
-
-#### 1. Configure Production Secrets
-Create a `.env` file in the project root:
-
-```bash
-# Database
-DATABASE_URL=postgres://homeorg:CHANGE_ME_DB_PASSWORD@postgres:5432/homeorg
-POSTGRES_PASSWORD=CHANGE_ME_DB_PASSWORD
-
-# Security Secrets (generate random strings with `openssl rand -base64 32`)
-SESSION_SECRET=replace-with-at-least-32-random-characters
-
-# Production Security
-ALLOW_DEMO=false
-PARENT_PIN=5678
-```
-
-> [!WARNING]
-> Always set `ALLOW_DEMO=false`, a non-default `PARENT_PIN`, and a strong, unique `SESSION_SECRET` in production. Parent PIN attempts are temporarily locked after repeated failures; do not expose the household board directly to the public internet without your usual network protections.
-
-#### 2. Start the Stack
 ```bash
 docker compose up -d --build
-```
-
-#### 3. Verify Container Health
-```bash
 docker compose ps
 ```
 
-The stack coordinates startup order automatically:
-1. `postgres` starts and completes its health check.
-2. `migrate` runs schema migrations to completion.
-3. `seed` creates the initial household (if empty).
-4. `web` and `worker` start serving traffic and materializing schedules.
+It intentionally uses fixed development credentials, PIN `1234`, and `ALLOW_DEMO=true`; it is not a production configuration and should not be exposed to an untrusted network. To start over locally, stop the stack and remove the named `postgres-data` volume only after confirming that you no longer need its data.
 
----
+## Kubernetes with Helm
 
-### Option B: Kubernetes via Helm
+The chart at [`helm/homeboard`](helm/homeboard) deploys the web application, one worker, and a pre-install/pre-upgrade migration job. It expects an external PostgreSQL database and a pre-existing Kubernetes Secret. The sample chart defaults are appropriate only as a starting point; set your ingress host and image tag before installing.
 
-A production-ready Helm chart is included under [`helm/homeboard`](file:///d:/gitprojects/home-org/helm/homeboard).
-
-#### 1. Prerequisites
-- A Kubernetes cluster (1.24+)
-- Ingress controller (e.g., `ingress-nginx`)
-- External PostgreSQL instance
-
-#### 2. Create the Kubernetes Secret
-Store database credentials and application keys in a Kubernetes Secret:
+Create a Secret containing the required keys:
 
 ```bash
+kubectl create namespace homeboard
 kubectl create secret generic homeboard-secrets \
-  --from-literal=DATABASE_URL="postgresql://homeorg:SECRET_PASSWORD@postgres.database.svc.cluster.local:5432/homeorg" \
+  --namespace homeboard \
+  --from-literal=DATABASE_URL="postgres://USER:PASSWORD@DATABASE_HOST:5432/DATABASE_NAME" \
   --from-literal=SESSION_SECRET="$(openssl rand -base64 32)"
 ```
 
-#### 3. Configure `values.yaml`
-Customize [`helm/homeboard/values.yaml`](file:///d:/gitprojects/home-org/helm/homeboard/values.yaml) or provide an override file:
+Create a values override such as `my-values.yaml`:
 
 ```yaml
 image:
   repository: butlerrc30/homeboard
-  tag: "v0.2.1"
-  pullPolicy: IfNotPresent
-
-replicaCount: 2
+  tag: "v0.2.20"
 
 ingress:
   enabled: true
-  className: nginx
-  host: homeboard.your-domain.local
-  tlsSecret: homeboard-tls-cert
+  className: traefik
+  host: homeboard.example.internal
 
 config:
-  appName: "Homeboard"
+  allowDemo: false
 
 secrets:
   existingSecret: homeboard-secrets
-  databaseUrlKey: DATABASE_URL
-  sessionSecretKey: SESSION_SECRET
-
-resources:
-  web:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      memory: 512Mi
-  worker:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      memory: 256Mi
 ```
 
-#### 4. Install or Upgrade with Helm
+Install or upgrade the release:
+
 ```bash
 helm upgrade --install homeboard ./helm/homeboard \
   --namespace homeboard \
-  --create-namespace \
-  -f my-values.yaml
+  --values my-values.yaml \
+  --wait --timeout 10m
 ```
 
-> [!NOTE]
-> The Helm chart includes a pre-install and pre-upgrade `Job` ([`migrate-job.yaml`](file:///d:/gitprojects/home-org/helm/homeboard/templates/migrate-job.yaml)) that executes database schema migrations before new pods are rolled out.
+By default, the chart does not seed demo data. A fresh deployment instead uses the first-run setup flow. Keep `config.allowDemo` set to `false` in production.
 
-#### 5. Maintainer Release and Deployment Workflow
+### Releases
 
-Use an immutable version tag for every production rollout. From a release branch:
+Use an immutable patch version and update `package.json`, `package-lock.json`, `helm/homeboard/Chart.yaml`, and `helm/homeboard/values.yaml` together. Validate the application and deployment configuration before opening a release PR:
 
-1. Update the version in `package.json`, `package-lock.json`, `helm/homeboard/Chart.yaml`, and `helm/homeboard/values.yaml`.
-2. Open a pull request and wait for the application and deployment validation checks to pass.
-3. Merge the pull request. The `release.yml` workflow creates the GitHub release and publishes both images:
-   - `butlerrc30/homeboard:vX.Y.Z`
-   - `butlerrc30/homeboard:vX.Y.Z-tools`
-4. Upgrade the cluster using the production values file, explicitly setting both image tags:
+```bash
+npm test
+npx tsc --noEmit
+npm run build
+docker compose config --quiet
+helm lint helm/homeboard
+helm template homeboard helm/homeboard --namespace homeboard > /dev/null
+```
+
+After publishing `butlerrc30/homeboard:vX.Y.Z` and `butlerrc30/homeboard:vX.Y.Z-tools` and creating the matching GitHub release/tag, upgrade production without replacing namespace-specific values:
 
 ```bash
 helm upgrade homeboard ./helm/homeboard \
   --namespace homeboard \
-  --values helm-values.yaml \
+  --reuse-values \
   --set image.tag=vX.Y.Z \
   --set image.toolsTag=vX.Y.Z-tools \
   --wait --timeout 10m
 ```
 
-Verify the release and workloads before considering the deployment complete:
+Confirm Helm reports `deployed`, both the web and worker deployments roll out, and the configured application URL returns HTTP 200. If rollout fails, roll back with `helm rollback homeboard <previous-revision> --namespace homeboard --wait`.
 
-```bash
-helm status homeboard --namespace homeboard
-kubectl rollout status deployment/homeboard-homeboard --namespace homeboard --timeout=120s
-kubectl rollout status deployment/homeboard-homeboard-worker --namespace homeboard --timeout=120s
-kubectl get pods --namespace homeboard -l app.kubernetes.io/name=homeboard
-```
+## Parent PIN recovery
 
-Do not reuse an existing image tag: production uses `IfNotPresent`, so a rebuilt image with the same tag may remain cached on a node.
+The household PIN is stored as an Argon2id hash in `households.fridge_pin_hash`. If that value is `NULL`, the application accepts the `PARENT_PIN` or `INITIAL_PIN` environment variable and persists its hash after a successful unlock. There is no built-in fallback PIN when neither variable is configured.
 
----
+If the PIN is forgotten, connect to the correct PostgreSQL database and clear the stored hash:
 
-## 🔐 Parent PIN Recovery & Reset
-
-### How the PIN Works
-- The fridge PIN protects the **Parent Console** on shared touchscreen displays.
-- The PIN is stored as an **Argon2id** cryptographic hash in the `households.fridge_pin_hash` database column.
-- When `fridge_pin_hash` is `NULL`, the application accepts the PIN defined by the `PARENT_PIN` or `INITIAL_PIN` environment variables (or defaults to `1234` if neither is set).
-- Once entered, the PIN is hashed and persisted into the database.
-
----
-
-### Reset Method 1: Database Reset (Quickest)
-
-If parents forget their PIN, the fastest and most reliable fix is to clear the stored hash in PostgreSQL. This immediately resets the PIN back to the environment variable default.
-
-#### In Docker Compose:
-```bash
-docker compose exec postgres psql -U homeorg -d homeorg -c "UPDATE households SET fridge_pin_hash = NULL;"
-```
-
-#### In Kubernetes:
-```bash
-kubectl exec -it deployment/postgres -n homeboard -- psql -U homeorg -d homeorg -c "UPDATE households SET fridge_pin_hash = NULL;"
-```
-*(Or run the SQL command directly in your managed database console e.g. AWS RDS, Supabase, etc.):*
 ```sql
 UPDATE households SET fridge_pin_hash = NULL;
 ```
 
-#### What happens next:
-1. Tap the **Parent Mode** lock icon on the fridge screen.
-2. Enter your default PIN:
-   - If `PARENT_PIN` or `INITIAL_PIN` is set in your environment / `.env`, enter that value.
-- Otherwise, set `PARENT_PIN` or `INITIAL_PIN` before attempting recovery.
-3. Homeboard validates the default PIN, automatically hashes it with Argon2id, and saves it.
-4. Go to **Settings** (gear icon) in the Parent Console and set your new custom PIN.
+Before unlocking Parent mode again, ensure the application has a known `PARENT_PIN` or `INITIAL_PIN`; then use that value and set a new PIN in Parent mode. In the local Compose demo, the reset command is:
 
----
-
-### Reset Method 2: Change PIN from Parent Console
-
-If you are already logged in as a parent on another device (desktop or phone) or have a valid browser session:
-
-1. Open Homeboard in your browser.
-2. Navigate to **Parent Mode** -> **Settings**.
-3. Locate the **Parent PIN** section.
-4. Enter a new 4 to 20 digit PIN and click **Update PIN**.
-
----
-
-### Reset Method 3: Demo Mode Access
-
-If running with `ALLOW_DEMO=true`:
-1. The Parent Console bypasses PIN requirements or allows one-click login with `parent@example.com` / `homeboard-demo`.
-2. Once in Parent Mode, open **Settings** and update the fridge PIN.
-
----
-
-## 🧪 Testing & Health Verification
-
-Homeboard includes comprehensive verification scripts to test end-to-end functionality inside your deployment container:
-
-### Run Stack Health & Functional Test
-Validates database connectivity, creates an isolated temporary household, schedules chores, tests checkoffs, approvals, groups, routines, and reports, and cleans up after itself:
 ```bash
-# In Docker Compose
-docker compose exec -T web node scripts/verify-stack.mjs
+docker compose exec postgres psql -U homeorg -d homeorg -c "UPDATE households SET fridge_pin_hash = NULL;"
+```
 
-# In Local Environment
+`ALLOW_DEMO=true` grants parent context for the first active household parent and is intended only for local demo use.
+
+## Verification
+
+Run the unit tests, type check, and production build:
+
+```bash
+npm test
+npx tsc --noEmit
+npm run build
+```
+
+For an integration check against a locally running application and database, run:
+
+```bash
 node scripts/verify-stack.mjs
 ```
 
-### Run Unit Tests
-```bash
-npm run test
-```
-
----
-
-## 📁 Project Layout
+## Project layout
 
 ```text
-├── db/
-│   └── migrations/              # Incremental SQL migrations
-├── docker-compose.yml           # Turnkey Docker Compose stack (postgres, app, worker)
-├── helm/
-│   └── homeboard/               # Production Kubernetes Helm chart
-├── scripts/
-│   ├── migrate.ts               # Migration runner script
-│   ├── seed.ts                  # Seed script for initial household
-│   └── verify-stack.mjs         # E2E functional test suite
-├── src/
-│   ├── app/                     # Next.js App Router (pages & REST API routes)
-│   │   ├── api/v1/              # Chores, routines, members, auth, dashboard API
-│   │   └── parent/              # Parent administration console
-│   ├── components/              # React UI components (portrait dashboard, widgets)
-│   ├── lib/                     # Auth, DB, recurrence rules, crypto utilities
-│   └── worker.ts                # Background recurrence & overdue scheduler
-└── Dockerfile                   # Multi-stage production container build
+db/migrations/       Ordered PostgreSQL migrations
+helm/homeboard/      Kubernetes Helm chart
+scripts/             Migration, seed, and integration-verification scripts
+src/app/             Next.js pages and API routes
+src/components/      Client components
+src/lib/             Database, authentication, scheduling, and domain logic
+src/worker.ts        Recurrence and overdue-status worker
 ```
 
----
-
-## 📄 License
+## License
 
 Private household project. All rights reserved.
