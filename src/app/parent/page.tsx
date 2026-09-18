@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { ArrowLeft, CheckCheck, Clock3, Home, KeyRound, Layers, ListChecks, RefreshCw, Settings, Sparkles, Users, X } from "lucide-react";
 import { ParentControllerProvider, useParentControllerContext } from "./parent-controller";
 import { ApprovalsTab } from "./approvals-tab";
@@ -36,6 +37,19 @@ function ParentContent() {
     pending,
     familyToday,
   } = useParentControllerContext();
+  const rescheduleModalRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = rescheduleModalRef.current;
+    if (!dialog) return;
+    if (rescheduleDialog && !dialog.open) dialog.showModal();
+    if (!rescheduleDialog && dialog.open) dialog.close();
+  }, [rescheduleDialog]);
+
+  const dismissReschedule = () => {
+    if (!busy) setRescheduleDialog(null);
+  };
+
   if (!authenticated) {
     return <main className="parent-shell pin-lock-shell">
       <header className="parent-header">
@@ -237,15 +251,27 @@ function ParentContent() {
       <span><Home size={16} aria-hidden="true" />homeboard</span>
       <p>A happy home is a team effort.</p>
     </footer>
-    {rescheduleDialog && (
-      <div className="reschedule-backdrop" role="presentation" onMouseDown={() => !busy && setRescheduleDialog(null)}>
-        <section className="reschedule-dialog" role="dialog" aria-modal="true" aria-labelledby="reschedule-title" aria-describedby="reschedule-description" onMouseDown={(event) => event.stopPropagation()}>
+    <dialog
+      ref={rescheduleModalRef}
+      className="reschedule-dialog"
+      aria-labelledby="reschedule-title"
+      aria-describedby="reschedule-description"
+      onCancel={(event) => {
+        event.preventDefault();
+        dismissReschedule();
+      }}
+      onClick={(event) => {
+        if (event.currentTarget === event.target) dismissReschedule();
+      }}
+    >
+      {rescheduleDialog && (
+        <>
           <div className="reschedule-dialog-head">
             <div>
               <p className="eyebrow">ONE-TIME CHANGE</p>
               <h2 id="reschedule-title">Reschedule {rescheduleDialog.title}</h2>
             </div>
-            <button type="button" className="reschedule-close" aria-label="Close reschedule dialog" disabled={Boolean(busy)} onClick={() => setRescheduleDialog(null)}>
+            <button type="button" className="reschedule-close" aria-label="Close reschedule dialog" disabled={Boolean(busy)} onClick={dismissReschedule}>
               <X size={18} aria-hidden="true" />
             </button>
           </div>
@@ -265,14 +291,14 @@ function ParentContent() {
             </div>
           )}
           <div className="reschedule-actions">
-            <button type="button" className="secondary" disabled={Boolean(busy)} onClick={() => setRescheduleDialog(null)}>Cancel</button>
+            <button type="button" className="secondary" disabled={Boolean(busy)} onClick={dismissReschedule}>Cancel</button>
             <button type="button" className="primary" disabled={!rescheduleDialog.selectedDate || Boolean(busy)} onClick={confirmReschedule}>
               <RefreshCw size={16} aria-hidden="true" />
               {busy?.startsWith("reschedule-") ? "Rescheduling…" : "Reschedule chore"}
             </button>
           </div>
-        </section>
-      </div>
-    )}
+        </>
+      )}
+    </dialog>
   </main>;
 }
