@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const from = url.searchParams.get("from") ?? dateInTimezone(new Date(Date.now() - 30 * 86_400_000), household.timezone);
     const to = url.searchParams.get("to") ?? today;
     const rows = await db<{
-      obligation_id: string; scheduled_for: string; history_date: string; title: string; child: string | null; status: string; approval_status: string; completed_at: Date | null;
+      obligation_id: string; scheduled_for: string; history_date: string; title: string; child: string | null; status: string; approval_status: string; completed_at: Date | null; rescheduled_for: string | null;
     }[]>`
       SELECT o.id AS obligation_id, co.scheduled_for,
         CASE WHEN ct.is_flexible = true AND o.completed_at IS NOT NULL
@@ -26,11 +26,13 @@ export async function GET(request: Request) {
           ELSE co.scheduled_for
         END AS history_date,
         ct.title, COALESCE(assignee.display_name, completed.display_name) AS child,
-        o.status, o.approval_status, o.completed_at
+        o.status, o.approval_status, o.completed_at, replacement_occurrence.scheduled_for AS rescheduled_for
       FROM chore_obligations o JOIN chore_occurrences co ON co.id = o.occurrence_id
       JOIN chore_templates ct ON ct.id = co.chore_template_id
       LEFT JOIN members assignee ON assignee.id = o.member_id
       LEFT JOIN members completed ON completed.id = o.completed_by
+      LEFT JOIN chore_obligations replacement ON replacement.rescheduled_from_obligation_id = o.id
+      LEFT JOIN chore_occurrences replacement_occurrence ON replacement_occurrence.id = replacement.occurrence_id
       WHERE co.household_id = ${context.householdId} AND (
         co.scheduled_for BETWEEN ${from} AND ${to}
         OR (
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
 
     if (url.searchParams.get("format") === "csv") {
       const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-      const body = ["history_date,scheduled_for,chore,child,status,approval_status,completed_at", ...rows.map((row) => [row.history_date, row.scheduled_for, row.title, row.child, row.status, row.approval_status, row.completed_at?.toISOString()].map(escape).join(","))].join("\n");
+      const body = ["history_date,scheduled_for,rescheduled_for,chore,child,status,approval_status,completed_at", ...rows.map((row) => [row.history_date, row.scheduled_for, row.rescheduled_for, row.title, row.child, row.status, row.approval_status, row.completed_at?.toISOString()].map(escape).join(","))].join("\n");
       return new Response(body, { headers: { "Content-Type": "text/csv", "Content-Disposition": "attachment; filename=homeboard-report.csv" } });
     }
     return NextResponse.json(

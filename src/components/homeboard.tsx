@@ -70,6 +70,17 @@ const formatScheduleBadge = (chore: { scheduleKind?: string; weekdays?: number[]
 };
 
 const getTaskIcon = (title: string, icon?: string | null) => resolveTaskIcon(title, icon);
+const PRAISE_MESSAGES = [
+  "All chores handled! Great job!",
+  "You crushed today's list—awesome work!",
+  "Big win! Everything that matters is done.",
+  "Way to show up for the team!",
+  "Look at that—your hard work paid off!",
+  "All set! Enjoy the rest of your day.",
+];
+const CONFETTI = Array.from({ length: 144 }, (_, index) => index);
+const choreBelongsTo = (chore: DashboardData["chores"][number], childId: string) =>
+  chore.assignee?.id === childId || (!chore.assignee && chore.allowedChildren.some((child) => child.id === childId));
 
 export function Homeboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -81,6 +92,9 @@ export function Homeboard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  const praiseByChild = useRef<Record<string, string>>({});
+  const confettiTimers = useRef<Record<string, number>>({});
+  const [celebratingChildren, setCelebratingChildren] = useState<Record<string, boolean>>({});
 
   // Apply the mutation response before requesting a new dashboard snapshot.  Some
   // display devices can take noticeably longer to receive that follow-up request,
@@ -128,12 +142,31 @@ export function Homeboard() {
     if (!chooser && dialog.current?.open) dialog.current.close();
   }, [chooser]);
 
-  const openCount = useMemo(() => data?.chores.filter((chore) => chore.status === "open" || chore.status === "rejected").length ?? 0, [data]);
-  const pendingCount = data?.chores.filter((chore) => chore.status === "pending").length ?? 0;
+  const today = useMemo(() => data
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: data.household.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
+    : "", [data?.household.timezone]);
+  const isOptionalFlexible = useCallback((chore: DashboardData["chores"][number]) =>
+    Boolean(chore.isFlexible && chore.scheduledFor > today), [today]);
+  const celebrateChild = useCallback((childId: string) => {
+    praiseByChild.current[childId] = PRAISE_MESSAGES[Math.floor(Math.random() * PRAISE_MESSAGES.length)];
+    window.clearTimeout(confettiTimers.current[childId]);
+    setCelebratingChildren((current) => ({ ...current, [childId]: true }));
+    confettiTimers.current[childId] = window.setTimeout(() => {
+      setCelebratingChildren((current) => ({ ...current, [childId]: false }));
+    }, 5200);
+  }, []);
+  const isFinalRequiredChoreForChild = useCallback((id: string, childId: string) => {
+    const requiredChores = (data?.chores.filter((chore) => choreBelongsTo(chore, childId)) ?? [])
+      .filter((chore) => !isOptionalFlexible(chore));
+    return requiredChores.some((chore) => chore.obligationId === id) &&
+      requiredChores.every((chore) => chore.obligationId === id || chore.status === "completed");
+  }, [data, isOptionalFlexible]);
+  const openCount = useMemo(() => data?.chores.filter((chore) =>
+    !isOptionalFlexible(chore) && (chore.status === "open" || chore.status === "rejected")
+  ).length ?? 0, [data, isOptionalFlexible]);
+  const pendingCount = data?.chores.filter((chore) => !isOptionalFlexible(chore) && chore.status === "pending").length ?? 0;
   const childProgress = useMemo(() => (data?.children ?? []).map((child) => {
-    const chores = data?.chores.filter((chore) =>
-      chore.assignee?.id === child.id || (!chore.assignee && chore.allowedChildren.some((member) => member.id === child.id))
-    ) ?? [];
+    const chores = (data?.chores.filter((chore) => choreBelongsTo(chore, child.id)) ?? []).filter((chore) => !isOptionalFlexible(chore));
     const routines = data?.routines.filter((routine) => {
       if (routine.ownerId) return routine.ownerId === child.id;
       const hasAssignedVersion = data?.routines.some((other) => other.title === routine.title && other.ownerId === child.id);
@@ -146,10 +179,24 @@ export function Homeboard() {
     const routineTotal = routines.reduce((count, routine) => count + routine.totalSteps, 0);
     const actionsLeft = choresLeft + routineTotal - routineDone;
     return { child, actionsLeft, choresDone, choresTotal: chores.length, pending, routineDone, routineTotal };
-  }), [data]);
+  }), [data, isOptionalFlexible]);
   const sharedOpenCount = useMemo(() => data?.chores.filter((chore) =>
-    !chore.assignee && chore.policy === "any" && (chore.status === "open" || chore.status === "rejected")
-  ).length ?? 0, [data]);
+    !isOptionalFlexible(chore) && !chore.assignee && chore.policy === "any" && (chore.status === "open" || chore.status === "rejected")
+  ).length ?? 0, [data, isOptionalFlexible]);
+  const allClearByChild = useMemo(() => Object.fromEntries((data?.children ?? []).map((child) => {
+    const requiredChores = (data?.chores.filter((chore) => choreBelongsTo(chore, child.id)) ?? []).filter((chore) => !isOptionalFlexible(chore));
+    const routines = data?.routines.filter((routine) => {
+      if (routine.ownerId) return routine.ownerId === child.id;
+      return !data?.routines.some((other) => other.title === routine.title && other.ownerId === child.id);
+    }) ?? [];
+    return [child.id, requiredChores.every((chore) => chore.status === "completed") && routines.every((routine) => routine.steps.every((step) => step.completed))];
+  })), [data, isOptionalFlexible]);
+  useEffect(() => () => {
+    Object.values(confettiTimers.current).forEach((timer) => window.clearTimeout(timer));
+  }, []);
+
+  const praiseFor = (childId: string) => praiseByChild.current[childId] ??=
+    PRAISE_MESSAGES[Math.floor(Math.random() * PRAISE_MESSAGES.length)];
 
   const hideBanner = async () => {
     setData((prev) => prev ? { ...prev, household: { ...prev.household, showBanner: false } } : null);
@@ -160,7 +207,7 @@ export function Homeboard() {
     }
   };
 
-  const completeChore = async (id: string, actorId: string, choreTitle?: string) => {
+  const completeChore = async (id: string, actorId: string, childId: string, choreTitle?: string) => {
     if (busy || offline) return;
     setBusy(id);
     try {
@@ -176,6 +223,7 @@ export function Homeboard() {
         completedBy: actorId,
         completedAt: new Date().toISOString()
       });
+      if (status === "completed" && isFinalRequiredChoreForChild(id, childId)) celebrateChild(childId);
       setNotice({
         title: status === "pending" ? "Nice work! Sent for parent approval." : "One less chore. One more little win!",
         undoChoreId: id,
@@ -224,6 +272,11 @@ export function Homeboard() {
   if (!data) return <main className="loading-shell"><div className="brand-mark"><Home aria-hidden="true" /></div><h1>Homeboard</h1><p role="status">{error ?? "Getting your family's day ready…"}</p>{error && <button className="primary" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Connecting…" : "Try again"}</button>}</main>;
 
   return <main className="board" id="main">
+    {Object.values(celebratingChildren).some(Boolean) && (
+      <div className="celebration-confetti" aria-hidden="true">
+        {CONFETTI.map((piece) => <span key={piece} style={{ "--confetti-x": `${(piece * 37) % 100}%`, "--confetti-y": `${((piece * 47) % 130) - 20}dvh`, "--confetti-delay": `${(piece % 12) * 65}ms`, "--confetti-color": ["#f3b64d", "#e76f83", "#6b9ac4", "#72a36a", "#9b77c6"][piece % 5] } as React.CSSProperties} />)}
+      </div>
+    )}
     <a href="#chores" className="skip-link">Skip to chores</a>
     <header className="board-header">
       <a href="/" className="brand"><span className="brand-mark"><Home size={14} aria-hidden="true" /></span>homeboard<span className="brand-tag">a little more together</span></a>
@@ -306,10 +359,9 @@ export function Homeboard() {
         </div>
       ) : (
         data.children.map((child) => {
-          const childChores = data.chores.filter((chore) =>
-            chore.assignee?.id === child.id || (!chore.assignee && chore.allowedChildren.some((c) => c.id === child.id))
-          );
-          const activeChores = childChores.filter((c) => c.status !== "completed");
+          const childChores = data.chores.filter((chore) => choreBelongsTo(chore, child.id));
+          const activeChores = childChores.filter((chore) => chore.status !== "completed" && !isOptionalFlexible(chore));
+          const optionalFlexibleChores = childChores.filter((chore) => chore.status !== "completed" && isOptionalFlexible(chore));
           const completedChores = childChores.filter((c) => c.status === "completed");
 
           const childRoutines = data.routines.filter((routine) => {
@@ -318,7 +370,7 @@ export function Homeboard() {
             return !hasAssigned;
           });
 
-          const allClear = activeChores.length === 0 && childRoutines.every((r) => r.steps.every((s) => s.completed));
+          const allClear = allClearByChild[child.id];
           const isCompletedCollapsed = collapsedCompleted[child.id] ?? false;
 
           return (
@@ -427,7 +479,7 @@ export function Homeboard() {
                             disabled={offline || Boolean(busy)}
                             onClick={() => {
                               const actor = chore.assignee?.id ?? child.id;
-                              void completeChore(chore.obligationId, actor, chore.title);
+                              void completeChore(chore.obligationId, actor, child.id, chore.title);
                             }}
                           >
                             {busy === chore.obligationId ? (
@@ -445,8 +497,35 @@ export function Homeboard() {
               {allClear && (
                 <div className="column-all-clear">
                   <Sparkles size={24} aria-hidden="true" />
-                  <p>{completedChores.length > 0 ? "All chores handled! Great job!" : "All clear over here!"}</p>
+                  <p>{praiseFor(child.id)}</p>
                 </div>
+              )}
+
+              {optionalFlexibleChores.length > 0 && (
+                <section className="column-task-section flexible-upcoming-section">
+                  <h3 className="section-subtitle">Flexible / upcoming</h3>
+                  <p className="flexible-upcoming-copy">Optional until its scheduled day.</p>
+                  <div className="task-cards-stack">
+                    {optionalFlexibleChores.map((chore) => (
+                      <div key={chore.obligationId} className={`child-task-card task-optional ${chore.status === "pending" ? "task-pending" : ""}`}>
+                        <span className="task-icon-badge" aria-hidden="true">{getTaskIcon(chore.title, chore.icon)}</span>
+                        <div className="task-card-content">
+                          <span className="task-title-text">{chore.title}</span>
+                          {chore.instructions && <p className="task-subtext">{chore.instructions}</p>}
+                          <div className="task-badges-row">
+                            <span className="task-mini-badge optional"><Calendar size={11} aria-hidden="true" />Optional until {new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(new Date(`${chore.scheduledFor}T12:00:00.000Z`))}</span>
+                            {chore.policy === "any" && !chore.assignee && <span className="task-mini-badge team">Team chore</span>}
+                          </div>
+                        </div>
+                        {chore.status === "pending" ? <span className="task-checkbox-btn pending" title="Awaiting parent approval"><Clock3 size={15} aria-hidden="true" /></span> : (
+                          <button type="button" className="task-checkbox-btn" aria-label={`Mark ${chore.title} done`} disabled={offline || Boolean(busy)} onClick={() => void completeChore(chore.obligationId, chore.assignee?.id ?? child.id, child.id, chore.title)}>
+                            {busy === chore.obligationId ? <RefreshCw size={13} className="spinning" aria-hidden="true" /> : null}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
               )}
 
               {/* Completed Chores Drawer */}
@@ -530,7 +609,7 @@ export function Homeboard() {
           <button
             key={child.id}
             disabled={Boolean(busy) || offline}
-            onClick={() => chooser.type === "chore" ? void completeChore(chooser.id, child.id, chooser.title) : void toggleStep(chooser.runId, chooser.stepId, child.id, chooser.completed)}
+            onClick={() => chooser.type === "chore" ? void completeChore(chooser.id, child.id, child.id, chooser.title) : void toggleStep(chooser.runId, chooser.stepId, child.id, chooser.completed)}
           >
             <span style={{ borderColor: child.color }}>{initials(child.name)}</span>
             {child.name}

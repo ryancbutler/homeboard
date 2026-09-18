@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { dateInTimezone } from "@/lib/dates";
+import { dateInTimezone, sundayOfWeek } from "@/lib/dates";
 
 export type DashboardData = {
   household: {
@@ -48,6 +48,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
   if (!household) throw new Error("Household not found");
   const today = dateInTimezone(new Date(), household.timezone);
   const weekFromToday = dateInTimezone(new Date(Date.now() + 7 * 86_400_000), household.timezone);
+  const weekEndsOn = sundayOfWeek(today);
   const [children, choreRows, routineRows] = await Promise.all([
     db<{ id: string; display_name: string; color: string; avatar_url: string | null }[]>`
       SELECT id, display_name, color, avatar_url FROM members
@@ -70,6 +71,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         AND (
           (co.scheduled_for <= ${today} AND o.status IN ('open', 'pending', 'rejected'))
           OR (ct.is_flexible = true AND co.scheduled_for >= ${today} AND co.scheduled_for <= ${weekFromToday} AND o.status IN ('open', 'pending', 'rejected'))
+          OR (o.rescheduled_from_obligation_id IS NOT NULL AND co.scheduled_for >= ${today} AND co.scheduled_for <= ${weekEndsOn} AND o.status IN ('open', 'pending', 'rejected'))
           OR (
             o.status = 'completed' AND (
               co.scheduled_for = ${today}

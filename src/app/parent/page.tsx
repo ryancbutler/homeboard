@@ -41,6 +41,16 @@ type ReportRow = {
   status: string;
   approval_status: string;
   completed_at: string | null;
+  rescheduled_for: string | null;
+};
+
+type RescheduleDay = { date: string; label: string; available: boolean; reason: string | null };
+type RescheduleDialog = {
+  obligationId: string;
+  title: string;
+  child: string | null;
+  days: RescheduleDay[] | null;
+  selectedDate: string | null;
 };
 
 type ReportSummary = {
@@ -72,6 +82,7 @@ type ChoreTemplate = {
   scheduleKind: string;
   startDate: string;
   dueTime: string | null;
+  nextScheduledFor: string | null;
   weekdays: number[];
   active: boolean;
   groupId: string | null;
@@ -94,6 +105,10 @@ type RoutineTemplate = {
 type NavTab = "approvals" | "chores" | "routines" | "groups" | "family" | "settings";
 
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const formatScheduledDate = (date: string | null) => date
+  ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`))
+  : "No upcoming instance";
 
 const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
@@ -172,6 +187,7 @@ export default function ParentPage() {
   const [historySearch, setHistorySearch] = useState("");
   const [historySortBy, setHistorySortBy] = useState<"date" | "chore" | "child" | "status">("date");
   const [historySortOrder, setHistorySortOrder] = useState<"asc" | "desc">("desc");
+  const [rescheduleDialog, setRescheduleDialog] = useState<RescheduleDialog | null>(null);
 
   const load = async () => {
     const [nextMembers, nextReport, nextGroups, nextChores, nextRoutines, nextDashboard] = await Promise.all([
@@ -428,6 +444,27 @@ export default function ParentPage() {
     void perform(`undo-${obligationId}`, async () => {
       await request(`/api/v1/obligations/${obligationId}/undo`, { method: "POST" });
       setNotice(`Chore "${choreTitle}" has been undone and reset to open.`);
+    });
+  };
+
+  const openReschedule = (row: ReportRow) => {
+    setRescheduleDialog({ obligationId: row.obligation_id, title: row.title, child: row.child, days: null, selectedDate: null });
+    void perform(`reschedule-options-${row.obligation_id}`, async () => {
+      const options = await request<{ days: RescheduleDay[] }>(`/api/v1/obligations/${row.obligation_id}/reschedule`);
+      setRescheduleDialog((current) => current?.obligationId === row.obligation_id ? { ...current, days: options.days } : current);
+    });
+  };
+
+  const confirmReschedule = () => {
+    if (!rescheduleDialog?.selectedDate) return;
+    const { obligationId, selectedDate, title } = rescheduleDialog;
+    void perform(`reschedule-${obligationId}`, async () => {
+      await request(`/api/v1/obligations/${obligationId}/reschedule`, {
+        method: "POST",
+        body: JSON.stringify({ scheduledFor: selectedDate })
+      });
+      setRescheduleDialog(null);
+      setNotice(`Chore "${title}" rescheduled for ${selectedDate}.`);
     });
   };
 
@@ -775,7 +812,7 @@ export default function ParentPage() {
                 <div>
                   <p className="eyebrow">THE LITTLE WINS ADD UP</p>
                   <h2>Chore history</h2>
-                  <p>Filter, sort, and undo any chore completion below.</p>
+                  <p>Filter, sort, undo, or reschedule a missed chore below.</p>
                 </div>
                 <a className="csv" href="/api/v1/reports?format=csv">
                   <Download size={16} aria-hidden="true" />Download CSV
@@ -879,6 +916,9 @@ export default function ParentPage() {
                             {row.status === "completed" && completedTime && (
                               <small className="status-time-hint">{completedTime}</small>
                             )}
+                            {row.status === "missed" && row.rescheduled_for && (
+                              <small className="status-time-hint">Rescheduled for {row.rescheduled_for}</small>
+                            )}
                           </td>
                           <td>
                             {row.obligation_id && (row.status === "completed" || row.status === "pending" || row.status === "rejected") && (
@@ -891,6 +931,17 @@ export default function ParentPage() {
                               >
                                 <RotateCcw size={13} aria-hidden="true" />
                                 Undo
+                              </button>
+                            )}
+                            {row.obligation_id && row.status === "missed" && !row.rescheduled_for && (
+                              <button
+                                type="button"
+                                className="history-reschedule-button"
+                                disabled={Boolean(busy)}
+                                onClick={() => openReschedule(row)}
+                              >
+                                <RefreshCw size={13} aria-hidden="true" />
+                                Reschedule
                               </button>
                             )}
                           </td>
@@ -1171,6 +1222,7 @@ export default function ParentPage() {
                           }
                           {chore.approvalRequired && " · Approval required"}
                         </small>
+                        <small className="template-scheduled">Scheduled: {formatScheduledDate(chore.nextScheduledFor)}</small>
                       </div>
                     </div>
                     <div className="template-actions">
@@ -1651,5 +1703,42 @@ export default function ParentPage() {
       <span><Home size={16} aria-hidden="true" />homeboard</span>
       <p>A happy home is a team effort.</p>
     </footer>
+    {rescheduleDialog && (
+      <div className="reschedule-backdrop" role="presentation" onMouseDown={() => !busy && setRescheduleDialog(null)}>
+        <section className="reschedule-dialog" role="dialog" aria-modal="true" aria-labelledby="reschedule-title" aria-describedby="reschedule-description" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="reschedule-dialog-head">
+            <div>
+              <p className="eyebrow">ONE-TIME CHANGE</p>
+              <h2 id="reschedule-title">Reschedule {rescheduleDialog.title}</h2>
+            </div>
+            <button type="button" className="reschedule-close" aria-label="Close reschedule dialog" disabled={Boolean(busy)} onClick={() => setRescheduleDialog(null)}>
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <p id="reschedule-description" className="reschedule-copy">
+            Choose an available day for {rescheduleDialog.child ?? "this chore"}. The original missed entry stays in history, and the original due time carries over.
+          </p>
+          {!rescheduleDialog.days ? (
+            <p className="form-hint" role="status">Checking this week&apos;s available days…</p>
+          ) : (
+            <div className="reschedule-days" aria-label="Available days through Sunday">
+              {rescheduleDialog.days.map((day) => (
+                <button key={day.date} type="button" className={`reschedule-day${rescheduleDialog.selectedDate === day.date ? " selected" : ""}`} disabled={!day.available || Boolean(busy)} aria-pressed={rescheduleDialog.selectedDate === day.date} onClick={() => setRescheduleDialog((current) => current ? { ...current, selectedDate: day.date } : current)}>
+                  <span>{day.label}</span>
+                  <small>{day.available ? "Available" : day.reason}</small>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="reschedule-actions">
+            <button type="button" className="secondary" disabled={Boolean(busy)} onClick={() => setRescheduleDialog(null)}>Cancel</button>
+            <button type="button" className="primary" disabled={!rescheduleDialog.selectedDate || Boolean(busy)} onClick={confirmReschedule}>
+              <RefreshCw size={16} aria-hidden="true" />
+              {busy?.startsWith("reschedule-") ? "Rescheduling…" : "Reschedule chore"}
+            </button>
+          </div>
+        </section>
+      </div>
+    )}
   </main>;
 }

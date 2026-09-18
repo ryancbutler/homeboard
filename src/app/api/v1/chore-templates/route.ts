@@ -27,13 +27,20 @@ export async function GET() {
     const rows = await db<{
       id: string; title: string; instructions: string | null; icon: string | null; assignment_policy: string;
       approval_required: boolean; is_flexible: boolean; schedule_kind: string; start_date: string; due_time: string | null;
-      weekdays: number[]; active: boolean; chore_group_id: string | null;
+      weekdays: number[]; active: boolean; chore_group_id: string | null; next_scheduled_for: string | null;
     }[]>`
-      SELECT id, title, instructions, icon, assignment_policy, approval_required, is_flexible, schedule_kind,
-             start_date, due_time, COALESCE(weekdays, '{}') AS weekdays, active, chore_group_id
-      FROM chore_templates
+      SELECT ct.id, title, instructions, icon, assignment_policy, approval_required, is_flexible, schedule_kind,
+             start_date, due_time, COALESCE(weekdays, '{}') AS weekdays, active, chore_group_id,
+             next_occurrence.scheduled_for AS next_scheduled_for
+      FROM chore_templates ct
+      JOIN households h ON h.id = ct.household_id
+      LEFT JOIN LATERAL (
+        SELECT scheduled_for FROM chore_occurrences
+        WHERE chore_template_id = ct.id AND scheduled_for >= (now() AT TIME ZONE h.timezone)::date
+        ORDER BY scheduled_for LIMIT 1
+      ) next_occurrence ON true
       WHERE household_id = ${context.householdId} AND active = true
-      ORDER BY created_at DESC`;
+      ORDER BY ct.created_at DESC`;
 
     const templateIds = rows.map((r) => r.id);
     const assignees = templateIds.length
@@ -61,6 +68,7 @@ export async function GET() {
       scheduleKind: row.schedule_kind,
       startDate: row.start_date,
       dueTime: row.due_time,
+      nextScheduledFor: row.next_scheduled_for,
       weekdays: row.weekdays,
       active: row.active,
       groupId: row.chore_group_id,

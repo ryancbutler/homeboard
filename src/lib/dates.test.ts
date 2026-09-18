@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isScheduledOn, scheduledDays } from "@/lib/dates";
+import { daysMondayToSunday, isScheduledOn, mondayOfWeek, scheduledDays, sundayOfWeek } from "@/lib/dates";
 
 describe("scheduling", () => {
   it("keeps a one-time chore immutable", () => {
@@ -33,5 +33,13 @@ describe("scheduling", () => {
   it("does not schedule before its start date", () => {
     const schedule = { kind: "weekly" as const, startDate: "2026-09-16", weekdays: [1] };
     expect(scheduledDays(schedule, "2026-09-14", "2026-09-21")).toEqual(["2026-09-21"]);
+  });
+
+  it("uses Monday through Sunday as the rescheduling week", () => {
+    expect(mondayOfWeek("2026-09-17")).toBe("2026-09-14");
+    expect(sundayOfWeek("2026-09-17")).toBe("2026-09-20");
+    expect(daysMondayToSunday("2026-09-17")).toEqual([
+      "2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19", "2026-09-20",
+    ]);
   });
 });
