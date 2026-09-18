@@ -28,12 +28,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     await db.begin(async (transaction) => {
       if (input.name) {
-        await transaction`
+        const [renamed] = await transaction<{ id: string }[]>`
           UPDATE chore_groups SET name = ${input.name}, updated_at = now()
-          WHERE id = ${id} AND household_id = ${context.householdId}`;
+          WHERE id = ${id} AND household_id = ${context.householdId} RETURNING id`;
+        if (!renamed) throw new Error("Chore group not found");
       }
 
       if (input.assignedMemberId !== undefined) {
+        const [rotation] = await transaction<{ id: string }[]>`
+          SELECT id FROM chore_group_rotations
+          WHERE household_id = ${context.householdId} AND (first_group_id = ${id} OR second_group_id = ${id})`;
+        if (rotation) throw new Error("Stop this group's rotation before assigning a child manually");
         const [group] = await transaction<{ id: string }[]>`
           UPDATE chore_groups SET assigned_member_id = ${input.assignedMemberId}, updated_at = now()
           WHERE id = ${id} AND household_id = ${context.householdId} RETURNING id`;

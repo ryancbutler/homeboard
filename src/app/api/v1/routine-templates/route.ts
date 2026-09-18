@@ -5,6 +5,11 @@ import { requireContext } from "@/lib/auth";
 import { apiError } from "@/lib/http";
 import { materializeRoutines } from "@/lib/recurrence";
 
+const routineStepSchema = z.union([
+  z.string().trim().min(1).max(120).transform((title) => ({ title, icon: null })),
+  z.object({ title: z.string().trim().min(1).max(120), icon: z.string().trim().max(50).nullable().optional() })
+]);
+
 const schema = z.object({
   title: z.string().trim().min(1).max(120),
   icon: z.string().trim().max(50).nullable().optional(),
@@ -15,7 +20,7 @@ const schema = z.object({
     dueTime: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
     weekdays: z.array(z.number().int().min(0).max(6)).default([])
   }),
-  steps: z.array(z.string().trim().min(1).max(120)).min(1).max(20)
+  steps: z.array(routineStepSchema).min(1).max(20)
 });
 
 export async function GET() {
@@ -42,8 +47,8 @@ export async function GET() {
 
     const [allSteps, allAssignees] = await Promise.all([
       templateIds.length
-        ? db<{ routine_template_id: string; id: string; position: number; title: string }[]>`
-            SELECT routine_template_id, id, position, title
+        ? db<{ routine_template_id: string; id: string; position: number; title: string; icon: string | null }[]>`
+            SELECT routine_template_id, id, position, title, icon
             FROM routine_steps
             WHERE routine_template_id = ANY(${templateIds})
             ORDER BY position`
@@ -57,10 +62,10 @@ export async function GET() {
         : []
     ]);
 
-    const stepsMap = new Map<string, { id: string; position: number; title: string }[]>();
+    const stepsMap = new Map<string, { id: string; position: number; title: string; icon: string | null }[]>();
     for (const step of allSteps) {
       const list = stepsMap.get(step.routine_template_id) ?? [];
-      list.push({ id: step.id, position: step.position, title: step.title });
+      list.push({ id: step.id, position: step.position, title: step.title, icon: step.icon });
       stepsMap.set(step.routine_template_id, list);
     }
 
@@ -103,8 +108,8 @@ export async function POST(request: Request) {
       await db`INSERT INTO routine_template_assignees (routine_template_id, member_id) VALUES (${template.id}, ${memberId})`;
     }
 
-    for (const [position, stepTitle] of input.steps.entries()) {
-      await db`INSERT INTO routine_steps (routine_template_id, position, title) VALUES (${template.id}, ${position + 1}, ${stepTitle})`;
+    for (const [position, step] of input.steps.entries()) {
+      await db`INSERT INTO routine_steps (routine_template_id, position, title, icon) VALUES (${template.id}, ${position + 1}, ${step.title}, ${step.icon ?? null})`;
     }
 
     await materializeRoutines();

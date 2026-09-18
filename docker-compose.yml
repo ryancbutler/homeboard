@@ -21,6 +21,7 @@ services:
     environment: &homeboard-env
       DATABASE_URL: postgres://homeorg:homeorg@postgres:5432/homeorg
       SESSION_SECRET: local-development-only-change-me-please
+      PARENT_PIN: "1234"
       ALLOW_DEMO: "true"
     depends_on:
       postgres: { condition: service_healthy }

@@ -276,6 +276,32 @@ button { border: 0; }
   align-items: center;
   gap: 8px;
 }
+.group-name-block { min-width: 0; }
+.group-name-line { display: flex; align-items: center; gap: 4px; }
+.group-rename-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.group-rename-button:hover { color: var(--purple-dark); background: #f1ebf8; }
+.group-rename-form { display: flex; align-items: center; gap: 7px; }
+.group-rename-form input { min-width: 0; max-width: 230px; }
+.group-rename-form .secondary { min-height: 38px; padding: 7px 10px; white-space: nowrap; }
+.rotation-list { display: grid; gap: 10px; margin: 0 0 18px; }
+.rotation-card { display: grid; gap: 10px; padding: 15px; border: 1px solid #d8cfe0; border-radius: 14px; background: #faf8fd; }
+.rotation-card strong,.rotation-card small { display: block; }
+.rotation-card small { color: var(--muted); font-size: .75rem; margin-top: 3px; }
+.rotation-preview { display: grid; gap: 5px; color: var(--ink); font-size: .78rem; line-height: 1.5; }
+.rotation-card .secondary { justify-self: start; min-height: 40px; }
+.rotation-create { margin: 0 0 18px; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.rotation-create h3 { margin: 0; font-size: 1rem; }
+.rotation-create .form-hint { margin: -5px 0 2px; }
 .unassigned-text {
   color: #a58f70;
   font-style: italic;
@@ -383,6 +409,21 @@ button { border: 0; }
   display: grid;
   gap: 8px;
 }
+.optional-chore-details {
+  display: grid;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fcfaff;
+}
+.optional-chore-details > summary {
+  cursor: pointer;
+  color: var(--purple-dark);
+  font-size: .84rem;
+  font-weight: 800;
+}
+.optional-chore-details[open] > summary { margin-bottom: 2px; }
 .icon-selector-header {
   display: grid;
   gap: 6px;
@@ -552,6 +593,9 @@ button { border: 0; }
   place-items: center;
   flex-shrink: 0;
 }
+.step-icon-preview { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border: 1px solid #e1d8ec; border-radius: 9px; background: #faf8fc; color: var(--purple-dark); }
+.step-icon-select { min-width: 112px; padding: 8px 7px; border: 1px solid #d8cfe0; border-radius: 9px; background: #fff; color: var(--ink); font-size: .73rem; font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .add-step-button {
   margin-top: 6px;
   justify-self: start;
@@ -938,6 +982,7 @@ button { border: 0; }
   margin-top: 3px;
   font-weight: 600;
 }
+.history-schedule-tag { display: inline-block; max-width: 210px; color: #65547a; font-size: .74rem; font-weight: 800; line-height: 1.35; }
 
 /* Clean Streamlined Settings & PIN Layout */
 .settings-stack {

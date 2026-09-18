@@ -67,7 +67,7 @@ Kids can easily check off daily obligations, follow step-by-step routines, and t
 ### 📊 Reports & Streak Tracking
 - **Completion Rates:** Real-time analytics breaking down completed, pending, and missed obligations.
 - **Historical Analysis:** Filter reports across custom date ranges and individual children.
-- **Data Portability:** Export household configuration and chore logs to JSON, or import backups.
+- **Data Portability:** Export or import household setup—family members, groups, chore templates, and routines—as JSON. Completion history stays in the household and is not overwritten by imports.
 
 ---
 
@@ -150,7 +150,7 @@ PARENT_PIN=5678
 ```
 
 > [!WARNING]
-> Always set `ALLOW_DEMO=false` and use strong, unique values for `SESSION_SECRET` in production.
+> Always set `ALLOW_DEMO=false`, a non-default `PARENT_PIN`, and a strong, unique `SESSION_SECRET` in production. Parent PIN attempts are temporarily locked after repeated failures; do not expose the household board directly to the public internet without your usual network protections.
 
 #### 2. Start the Stack
 ```bash
@@ -273,7 +273,7 @@ UPDATE households SET fridge_pin_hash = NULL;
 1. Tap the **Parent Mode** lock icon on the fridge screen.
 2. Enter your default PIN:
    - If `PARENT_PIN` or `INITIAL_PIN` is set in your environment / `.env`, enter that value.
-   - Otherwise, enter the default `1234`.
+- Otherwise, set `PARENT_PIN` or `INITIAL_PIN` before attempting recovery.
 3. Homeboard validates the default PIN, automatically hashes it with Argon2id, and saves it.
 4. Go to **Settings** (gear icon) in the Parent Console and set your new custom PIN.
 

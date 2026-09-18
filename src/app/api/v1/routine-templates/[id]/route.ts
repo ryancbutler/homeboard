@@ -6,6 +6,11 @@ import { apiError } from "@/lib/http";
 import { materializeRoutines } from "@/lib/recurrence";
 import { dateInTimezone } from "@/lib/dates";
 
+const routineStepSchema = z.union([
+  z.string().trim().min(1).max(120).transform((title) => ({ title, icon: null })),
+  z.object({ title: z.string().trim().min(1).max(120), icon: z.string().trim().max(50).nullable().optional() })
+]);
+
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   icon: z.string().trim().max(50).nullable().optional(),
@@ -16,7 +21,7 @@ const updateSchema = z.object({
     dueTime: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
     weekdays: z.array(z.number().int().min(0).max(6)).default([])
   }).optional(),
-  steps: z.array(z.string().trim().min(1).max(120)).min(1).max(20).optional()
+  steps: z.array(routineStepSchema).min(1).max(20).optional()
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -57,8 +62,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       if (input.steps !== undefined) {
         await tx`DELETE FROM routine_steps WHERE routine_template_id = ${id}`;
-        for (const [position, stepTitle] of input.steps.entries()) {
-          await tx`INSERT INTO routine_steps (routine_template_id, position, title) VALUES (${id}, ${position + 1}, ${stepTitle})`;
+        for (const [position, step] of input.steps.entries()) {
+          await tx`INSERT INTO routine_steps (routine_template_id, position, title, icon) VALUES (${id}, ${position + 1}, ${step.title}, ${step.icon ?? null})`;
         }
       }
 

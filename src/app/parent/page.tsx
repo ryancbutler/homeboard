@@ -42,6 +42,9 @@ type ReportRow = {
   approval_status: string;
   completed_at: string | null;
   rescheduled_for: string | null;
+  is_flexible: boolean;
+  schedule_kind: string;
+  weekdays: number[];
 };
 
 type RescheduleDay = { date: string; label: string; available: boolean; reason: string | null };
@@ -70,6 +73,16 @@ type Report = {
 };
 
 type ChoreGroup = { id: string; name: string; assignedMemberId: string | null; assignedMemberName: string; templateCount: number };
+type ChoreGroupRotation = {
+  id: string;
+  startDate: string;
+  firstGroup: { id: string; name: string };
+  secondGroup: { id: string; name: string };
+  firstMember: { id: string; name: string };
+  secondMember: { id: string; name: string };
+  current: { firstGroupMemberId: string | null; secondGroupMemberId: string | null };
+  next: { firstGroupMemberId: string | null; secondGroupMemberId: string | null };
+};
 
 type ChoreTemplate = {
   id: string;
@@ -98,9 +111,10 @@ type RoutineTemplate = {
   startDate: string;
   dueTime: string | null;
   weekdays: number[];
-  steps: { id: string; position: number; title: string }[];
+  steps: { id: string; position: number; title: string; icon: string | null }[];
   assignees: { id: string; name: string }[];
 };
+type RoutineStepDraft = { title: string; icon: string };
 
 type NavTab = "approvals" | "chores" | "routines" | "groups" | "family" | "settings";
 
@@ -109,6 +123,22 @@ const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const formatScheduledDate = (date: string | null) => date
   ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`))
   : "No upcoming instance";
+
+const nextMonday = () => {
+  const value = new Date();
+  const days = (8 - value.getDay()) % 7 || 7;
+  value.setDate(value.getDate() + days);
+  return value.toISOString().slice(0, 10);
+};
+
+const formatHistorySchedule = (row: ReportRow) => {
+  if (row.rescheduled_for) return `Rescheduled to ${formatScheduledDate(row.rescheduled_for)}`;
+  if (row.is_flexible) return `Flexible · due ${formatScheduledDate(row.scheduled_for)}`;
+  if (row.schedule_kind === "daily") return "Daily";
+  if (row.schedule_kind === "weekdays") return "Weekdays (Mon–Fri)";
+  if (row.schedule_kind === "once") return `One time · ${formatScheduledDate(row.scheduled_for)}`;
+  return `Weekly · ${formatScheduledDate(row.scheduled_for)}`;
+};
 
 const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
@@ -126,6 +156,14 @@ export default function ParentPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [groups, setGroups] = useState<ChoreGroup[]>([]);
+  const [rotations, setRotations] = useState<ChoreGroupRotation[]>([]);
+  const [rotationFirstGroupId, setRotationFirstGroupId] = useState("");
+  const [rotationSecondGroupId, setRotationSecondGroupId] = useState("");
+  const [rotationFirstMemberId, setRotationFirstMemberId] = useState("");
+  const [rotationSecondMemberId, setRotationSecondMemberId] = useState("");
+  const [rotationStartDate, setRotationStartDate] = useState(nextMonday);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupNameInput, setGroupNameInput] = useState("");
   const [choreTemplates, setChoreTemplates] = useState<ChoreTemplate[]>([]);
   const [routineTemplates, setRoutineTemplates] = useState<RoutineTemplate[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -168,7 +206,7 @@ export default function ParentPage() {
   const [routineIcon, setRoutineIcon] = useState("");
   const [routineIconFilter, setRoutineIconFilter] = useState("");
   const [routineAssigneeIds, setRoutineAssigneeIds] = useState<string[]>([]);
-  const [routineSteps, setRoutineSteps] = useState<string[]>(["", "", ""]);
+  const [routineSteps, setRoutineSteps] = useState<RoutineStepDraft[]>([{ title: "", icon: "" }, { title: "", icon: "" }, { title: "", icon: "" }]);
   const filteredRoutineIcons = useMemo(() => {
     const q = routineIconFilter.trim().toLowerCase();
     if (!q) return CHORE_ICONS;
@@ -190,10 +228,11 @@ export default function ParentPage() {
   const [rescheduleDialog, setRescheduleDialog] = useState<RescheduleDialog | null>(null);
 
   const load = async () => {
-    const [nextMembers, nextReport, nextGroups, nextChores, nextRoutines, nextDashboard] = await Promise.all([
+    const [nextMembers, nextReport, nextGroups, nextRotations, nextChores, nextRoutines, nextDashboard] = await Promise.all([
       request<Member[]>("/api/v1/members"),
       request<Report>("/api/v1/reports"),
       request<ChoreGroup[]>("/api/v1/chore-groups"),
+      request<ChoreGroupRotation[]>("/api/v1/chore-group-rotations"),
       request<ChoreTemplate[]>("/api/v1/chore-templates"),
       request<RoutineTemplate[]>("/api/v1/routine-templates"),
       request<DashboardData>("/api/v1/dashboard"),
@@ -201,6 +240,7 @@ export default function ParentPage() {
     setMembers(nextMembers);
     setReport(nextReport);
     setGroups(nextGroups);
+    setRotations(nextRotations);
     setChoreTemplates(nextChores);
     setRoutineTemplates(nextRoutines);
     setDashboard(nextDashboard);
@@ -346,7 +386,7 @@ export default function ParentPage() {
     setRoutineIcon(routine.icon ?? "");
     setRoutineIconFilter("");
     setRoutineAssigneeIds(routine.assignees.map((a) => a.id));
-    setRoutineSteps(routine.steps.length ? routine.steps.map((s) => s.title) : [""]);
+    setRoutineSteps(routine.steps.length ? routine.steps.map((s) => ({ title: s.title, icon: s.icon ?? "" })) : [{ title: "", icon: "" }]);
     setActiveTab("routines");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -359,7 +399,7 @@ export default function ParentPage() {
     setRoutineIcon("");
     setRoutineIconFilter("");
     setRoutineAssigneeIds([]);
-    setRoutineSteps(["", "", ""]);
+    setRoutineSteps([{ title: "", icon: "" }, { title: "", icon: "" }, { title: "", icon: "" }]);
   };
 
   const saveRoutine = (event: FormEvent<HTMLFormElement>) => {
@@ -367,7 +407,9 @@ export default function ParentPage() {
     const element = event.currentTarget;
     const form = new FormData(element);
     const title = String(form.get("routineTitle"));
-    const validSteps = routineSteps.map((s) => s.trim()).filter(Boolean);
+    const validSteps = routineSteps
+      .map((step) => ({ title: step.title.trim(), icon: step.icon || null }))
+      .filter((step) => Boolean(step.title));
 
     if (!validSteps.length) {
       setNotice("Please add at least one step for this routine.");
@@ -425,6 +467,51 @@ export default function ParentPage() {
     });
     setNotice(memberId ? "Group assignment updated for open chores." : "Child removed from group.");
   });
+
+  const createRotation = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void perform("rotation", async () => {
+      await request("/api/v1/chore-group-rotations", {
+        method: "POST",
+        body: JSON.stringify({
+          firstGroupId: rotationFirstGroupId,
+          secondGroupId: rotationSecondGroupId,
+          firstMemberId: rotationFirstMemberId,
+          secondMemberId: rotationSecondMemberId,
+          startDate: rotationStartDate
+        })
+      });
+      setNotice("Weekly group rotation scheduled. Future chores will alternate automatically.");
+    });
+  };
+
+  const stopRotation = (rotation: ChoreGroupRotation) => {
+    if (!window.confirm(`Stop the rotation between ${rotation.firstGroup.name} and ${rotation.secondGroup.name}?`)) return;
+    void perform(`stop-rotation-${rotation.id}`, async () => {
+      await request(`/api/v1/chore-group-rotations/${rotation.id}`, { method: "DELETE" });
+      setNotice("Group rotation stopped. Each group keeps this week's child.");
+    });
+  };
+
+  const startRenameGroup = (group: ChoreGroup) => {
+    setEditingGroupId(group.id);
+    setGroupNameInput(group.name);
+  };
+
+  const saveGroupName = (event: FormEvent<HTMLFormElement>, group: ChoreGroup) => {
+    event.preventDefault();
+    const name = groupNameInput.trim();
+    if (!name) return;
+    if (name === group.name) {
+      setEditingGroupId(null);
+      return;
+    }
+    void perform(`rename-group-${group.id}`, async () => {
+      await request(`/api/v1/chore-groups/${group.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      setEditingGroupId(null);
+      setNotice(`Group renamed to "${name}".`);
+    });
+  };
 
   const deleteGroup = (groupId: string, name: string) => {
     if (!window.confirm(`Delete group "${name}"? Existing chores will remain without a group.`)) return;
@@ -513,6 +600,11 @@ export default function ParentPage() {
   const handleImport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!importFile) return;
+    if (importFile.size > 1_000_000) {
+      setNotice("Backup files must be smaller than 1 MB.");
+      return;
+    }
+    if (!window.confirm("Import this setup? It adds missing children, groups, chores, and routines. Existing chores and routines with the same name will be left unchanged.")) return;
     void perform("import", async () => {
       const text = await importFile.text();
       const json = JSON.parse(text);
@@ -522,11 +614,14 @@ export default function ParentPage() {
         importedGroups: number;
         importedChores: number;
         importedRoutines: number;
+        skippedChores: number;
+        skippedRoutines: number;
       }>("/api/v1/backup", {
         method: "POST",
         body: JSON.stringify(json)
       });
-      setNotice(`Import successful! Restored ${res.importedChildren ? `${res.importedChildren} children, ` : ""}${res.importedChores} chores, ${res.importedRoutines} routines, and ${res.importedGroups} groups.`);
+      const skipped = res.skippedChores + res.skippedRoutines;
+      setNotice(`Import complete: added ${res.importedChildren ? `${res.importedChildren} children, ` : ""}${res.importedChores} chores, ${res.importedRoutines} routines, and ${res.importedGroups} groups.${skipped ? ` Left ${skipped} matching chore or routine${skipped === 1 ? "" : "s"} unchanged.` : ""}`);
       clearImportFile();
       (event.target as HTMLFormElement).reset();
     });
@@ -566,6 +661,8 @@ export default function ParentPage() {
   // Keep this memo before the PIN-lock return so hook ordering is identical
   // before and after authentication.
   const children = members.filter((member) => member.role === "child" && member.active);
+  const rotatingGroupIds = new Set(rotations.flatMap((rotation) => [rotation.firstGroup.id, rotation.secondGroup.id]));
+  const childName = (id: string | null) => children.find((child) => child.id === id)?.displayName ?? "Waiting to start";
   const pending = dashboard?.chores.filter((chore) => chore.status === "pending") ?? [];
   const familyToday = useMemo(() => {
     if (!dashboard) return null;
@@ -882,6 +979,7 @@ export default function ParentPage() {
                     <tr>
                       <th scope="col">Date & Time</th>
                       <th scope="col">Chore</th>
+                      <th scope="col">Schedule</th>
                       <th scope="col">Child</th>
                       <th scope="col">Status</th>
                       <th scope="col">Action</th>
@@ -910,6 +1008,7 @@ export default function ParentPage() {
                             </div>
                           </td>
                           <td><strong>{row.title}</strong></td>
+                          <td><span className="history-schedule-tag">{formatHistorySchedule(row)}</span></td>
                           <td>{row.child ?? "Shared"}</td>
                           <td>
                             <span className={`pill ${row.status}`}>{row.status}</span>
@@ -975,18 +1074,19 @@ export default function ParentPage() {
                     onChange={(e) => setChoreTitleInput(e.target.value)}
                   />
                 </label>
-                <label>
-                  Instructions
-                  <input
-                    name="instructions"
-                    maxLength={500}
-                    key={`inst-${editingChore?.id}`}
-                    defaultValue={editingChore?.instructions ?? ""}
-                    placeholder="A few details to help them out"
-                  />
-                </label>
-
-                <div className="icon-selector-section">
+                <details className="optional-chore-details">
+                  <summary>Optional details and icon</summary>
+                  <label>
+                    Instructions
+                    <input
+                      name="instructions"
+                      maxLength={500}
+                      key={`inst-${editingChore?.id}`}
+                      defaultValue={editingChore?.instructions ?? ""}
+                      placeholder="A few details to help them out"
+                    />
+                  </label>
+                  <div className="icon-selector-section">
                   <div className="icon-selector-header">
                     <span className="form-label-text">Chore icon</span>
                     <span className="icon-current-preview">
@@ -1057,7 +1157,8 @@ export default function ParentPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                  </div>
+                </details>
 
                 <div className="two-col">
                   <label>Schedule
@@ -1097,6 +1198,8 @@ export default function ParentPage() {
                   )}
                 </div>
 
+                <details className="optional-chore-details">
+                  <summary>More scheduling and assignment options</summary>
                 {choreScheduleKind === "weekly" && (
                   <label className="check">
                     <input
@@ -1183,6 +1286,7 @@ export default function ParentPage() {
                   />
                   Require parent approval
                 </label>
+                </details>
 
                 <div className="form-actions">
                   <button className="primary" disabled={busy === "chore-save"}>
@@ -1363,18 +1467,33 @@ export default function ParentPage() {
                     {routineSteps.map((step, idx) => (
                       <div className="step-input-row" key={idx}>
                         <span className="step-number">{idx + 1}</span>
+                        <span className="step-icon-preview" aria-hidden="true">{resolveTaskIcon(step.title || `Step ${idx + 1}`, step.icon || null, 17)}</span>
                         <input
                           type="text"
                           required
                           maxLength={120}
-                          value={step}
+                          value={step.title}
                           placeholder={`Step ${idx + 1} (e.g. Brush teeth)`}
                           onChange={(e) => {
                             const updated = [...routineSteps];
-                            updated[idx] = e.target.value;
+                            updated[idx] = { ...updated[idx], title: e.target.value };
                             setRoutineSteps(updated);
                           }}
                         />
+                        <label className="sr-only" htmlFor={`routine-step-icon-${idx}`}>Icon for step {idx + 1}</label>
+                        <select
+                          id={`routine-step-icon-${idx}`}
+                          className="step-icon-select"
+                          value={step.icon}
+                          onChange={(e) => {
+                            const updated = [...routineSteps];
+                            updated[idx] = { ...updated[idx], icon: e.target.value };
+                            setRoutineSteps(updated);
+                          }}
+                        >
+                          <option value="">Auto icon</option>
+                          {CHORE_ICONS.map((icon) => <option key={icon.id} value={icon.id}>{icon.label}</option>)}
+                        </select>
                         {routineSteps.length > 1 && (
                           <button
                             type="button"
@@ -1390,7 +1509,7 @@ export default function ParentPage() {
                     <button
                       type="button"
                       className="secondary add-step-button"
-                      onClick={() => setRoutineSteps([...routineSteps, ""])}
+                      onClick={() => setRoutineSteps([...routineSteps, { title: "", icon: "" }])}
                     >
                       <Plus size={15} aria-hidden="true" /> Add step
                     </button>
@@ -1468,20 +1587,102 @@ export default function ParentPage() {
             <p className="eyebrow">TAKE TURNS, TOGETHER</p>
             <h2>Chore groups</h2>
             <p className="integration-copy">Create groups to bundle related chores. Assign a child when ready, or remove them to unassign.</p>
+            {rotations.length > 0 && (
+              <div className="rotation-list" aria-label="Active weekly group rotations">
+                {rotations.map((rotation) => (
+                  <article className="rotation-card" key={rotation.id}>
+                    <div>
+                      <strong>{rotation.firstGroup.name} ↔ {rotation.secondGroup.name}</strong>
+                      <small>Swaps every Monday · started {formatScheduledDate(rotation.startDate)}</small>
+                    </div>
+                    <div className="rotation-preview">
+                      <span>This week: {rotation.firstGroup.name} — {childName(rotation.current.firstGroupMemberId)}; {rotation.secondGroup.name} — {childName(rotation.current.secondGroupMemberId)}</span>
+                      <span>Next week: {rotation.firstGroup.name} — {childName(rotation.next.firstGroupMemberId)}; {rotation.secondGroup.name} — {childName(rotation.next.secondGroupMemberId)}</span>
+                    </div>
+                    <button type="button" className="secondary" disabled={Boolean(busy)} onClick={() => stopRotation(rotation)}>Stop rotation</button>
+                  </article>
+                ))}
+              </div>
+            )}
+            {groups.length >= 2 && children.length >= 2 && (
+              <form className="rotation-create" onSubmit={createRotation}>
+                <h3>Alternate two groups weekly</h3>
+                <p className="form-hint">Choose who starts with each group. The groups switch children every Monday until you stop the rotation.</p>
+                <div className="two-col">
+                  <label>First group
+                    <select required value={rotationFirstGroupId} onChange={(event) => setRotationFirstGroupId(event.target.value)}>
+                      <option value="">Choose a group</option>
+                      {groups.filter((group) => !rotatingGroupIds.has(group.id)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    </select>
+                  </label>
+                  <label>Child with first group
+                    <select required value={rotationFirstMemberId} onChange={(event) => setRotationFirstMemberId(event.target.value)}>
+                      <option value="">Choose a child</option>
+                      {children.map((child) => <option key={child.id} value={child.id}>{child.displayName}</option>)}
+                    </select>
+                  </label>
+                  <label>Second group
+                    <select required value={rotationSecondGroupId} onChange={(event) => setRotationSecondGroupId(event.target.value)}>
+                      <option value="">Choose a group</option>
+                      {groups.filter((group) => !rotatingGroupIds.has(group.id) && group.id !== rotationFirstGroupId).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    </select>
+                  </label>
+                  <label>Child with second group
+                    <select required value={rotationSecondMemberId} onChange={(event) => setRotationSecondMemberId(event.target.value)}>
+                      <option value="">Choose a child</option>
+                      {children.filter((child) => child.id !== rotationFirstMemberId).map((child) => <option key={child.id} value={child.id}>{child.displayName}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label>First Monday
+                  <input type="date" required value={rotationStartDate} onChange={(event) => setRotationStartDate(event.target.value)} />
+                </label>
+                <button className="primary" disabled={Boolean(busy) || !rotationFirstGroupId || !rotationSecondGroupId || !rotationFirstMemberId || !rotationSecondMemberId}>
+                  {busy === "rotation" ? "Scheduling…" : "Start weekly rotation"}
+                </button>
+              </form>
+            )}
             <div className="group-list">
               {groups.map((group) => (
                 <div className="group-row" key={group.id}>
-                  <div>
-                    <strong>{group.name}</strong>
+                  <div className="group-name-block">
+                    {editingGroupId === group.id ? (
+                      <form className="group-rename-form" onSubmit={(event) => saveGroupName(event, group)}>
+                        <label className="sr-only" htmlFor={`group-name-${group.id}`}>Group name</label>
+                        <input
+                          id={`group-name-${group.id}`}
+                          value={groupNameInput}
+                          maxLength={80}
+                          autoFocus
+                          onChange={(event) => setGroupNameInput(event.target.value)}
+                        />
+                        <button type="submit" className="secondary" disabled={!groupNameInput.trim() || Boolean(busy)}>Save</button>
+                        <button type="button" className="secondary" disabled={Boolean(busy)} onClick={() => setEditingGroupId(null)}>Cancel</button>
+                      </form>
+                    ) : (
+                      <div className="group-name-line">
+                        <strong>{group.name}</strong>
+                        <button
+                          type="button"
+                          className="group-rename-button"
+                          aria-label={`Rename ${group.name}`}
+                          title={`Rename ${group.name}`}
+                          disabled={Boolean(busy)}
+                          onClick={() => startRenameGroup(group)}
+                        >
+                          <Pencil size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
                     <small>
-                      {group.templateCount} chore{group.templateCount === 1 ? "" : "s"} · currently {group.assignedMemberId ? group.assignedMemberName : <em className="unassigned-text">Unassigned</em>}
+                      {group.templateCount} chore{group.templateCount === 1 ? "" : "s"} · {rotatingGroupIds.has(group.id) ? "weekly rotation active" : <>currently {group.assignedMemberId ? group.assignedMemberName : <em className="unassigned-text">Unassigned</em>}</>}
                     </small>
                   </div>
                   <div className="group-controls">
                     <select
                       aria-label={`Assign ${group.name}`}
                       value={group.assignedMemberId ?? ""}
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || rotatingGroupIds.has(group.id)}
                       onChange={(event) => switchGroup(group.id, event.target.value)}
                     >
                       <option value="">Unassigned (No child)</option>
@@ -1601,20 +1802,20 @@ export default function ParentPage() {
             {/* Card 2: Backup & Restore */}
             <section className="management-card">
               <p className="eyebrow">DATA MANAGEMENT</p>
-              <h2>Export & Import Setup</h2>
+              <h2>Move your setup</h2>
               <p className="form-hint">
-                Safely backup or restore your children, chores, routines, checklist steps, and groups.
+                Export the household setup, or add its missing pieces to another household. Completion history is not included.
               </p>
 
               <div className="backup-streamlined">
                 <div className="backup-row">
                   <div>
                     <strong>Export setup</strong>
-                    <p className="form-hint">Download a complete JSON backup file containing all children, chores, routines, steps, and groups.</p>
+                    <p className="form-hint">Download children, chore and routine schedules, checklist steps, and groups as JSON.</p>
                   </div>
                   <button type="button" className="secondary" onClick={handleExport}>
                     <Download size={16} aria-hidden="true" />
-                    Download JSON Backup
+                    Download setup file
                   </button>
                 </div>
 
@@ -1623,7 +1824,7 @@ export default function ParentPage() {
                 <div className="backup-row">
                   <div>
                     <strong>Import setup</strong>
-                    <p className="form-hint">Upload a JSON backup file to restore into this household.</p>
+                    <p className="form-hint">Adds missing items only. Matching chore and routine names stay unchanged; history is never replaced.</p>
                   </div>
                   <form onSubmit={handleImport} className="import-inline-form">
                     <div
@@ -1688,7 +1889,7 @@ export default function ParentPage() {
                     </div>
                     <button className="primary" disabled={!importFile || busy === "import"}>
                       <Upload size={16} aria-hidden="true" />
-                      {busy === "import" ? "Importing…" : "Upload & Import"}
+                      {busy === "import" ? "Importing…" : "Import setup"}
                     </button>
                   </form>
                 </div>

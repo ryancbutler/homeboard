@@ -87,9 +87,10 @@ export async function verifyHouseholdPin(householdId: string, pin: string): Prom
     SELECT fridge_pin_hash FROM households WHERE id = ${householdId}`;
   if (!rows[0]) return false;
 
-  const initialPin = process.env.PARENT_PIN || process.env.INITIAL_PIN || "1234";
+  const initialPin = process.env.PARENT_PIN || process.env.INITIAL_PIN;
 
   if (!rows[0].fridge_pin_hash) {
+    if (!initialPin) throw new Error("Parent PIN has not been configured");
     if (pin === initialPin) {
       const hashed = await hashSecret(initialPin);
       await db`UPDATE households SET fridge_pin_hash = ${hashed} WHERE id = ${householdId}`;

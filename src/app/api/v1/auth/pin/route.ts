@@ -12,6 +12,38 @@ const changePinSchema = z.object({
   newPin: z.string().min(4).max(20)
 });
 
+const attemptWindow = "15 minutes";
+const lockDuration = "5 minutes";
+const maxAttempts = 5;
+
+async function isPinLocked(householdId: string) {
+  const [attempt] = await db<{ locked_until: Date | null }[]>`
+    SELECT locked_until FROM household_pin_attempts WHERE household_id = ${householdId}`;
+  return Boolean(attempt?.locked_until && attempt.locked_until > new Date());
+}
+
+async function recordFailedPinAttempt(householdId: string) {
+  const [attempt] = await db<{ locked_until: Date | null }[]>`
+    INSERT INTO household_pin_attempts (household_id, failed_attempts, last_failed_at, locked_until)
+    VALUES (${householdId}, 1, now(), NULL)
+    ON CONFLICT (household_id) DO UPDATE SET
+      failed_attempts = CASE
+        WHEN household_pin_attempts.last_failed_at < now() - ${attemptWindow}::interval THEN 1
+        ELSE household_pin_attempts.failed_attempts + 1
+      END,
+      last_failed_at = now(),
+      locked_until = CASE
+        WHEN (CASE
+          WHEN household_pin_attempts.last_failed_at < now() - ${attemptWindow}::interval THEN 1
+          ELSE household_pin_attempts.failed_attempts + 1
+        END) >= ${maxAttempts} THEN now() + ${lockDuration}::interval
+        ELSE NULL
+      END,
+      updated_at = now()
+    RETURNING locked_until`;
+  return Boolean(attempt?.locked_until && attempt.locked_until > new Date());
+}
+
 export async function POST(request: Request) {
   try {
     const input = pinSchema.parse(await request.json());
@@ -24,10 +56,19 @@ export async function POST(request: Request) {
       householdId = h.id;
     }
 
+    if (await isPinLocked(householdId)) {
+      return NextResponse.json({ error: "Too many PIN attempts. Try again in a few minutes." }, { status: 429 });
+    }
+
     const isValid = await verifyHouseholdPin(householdId, input.pin);
     if (!isValid) {
+      if (await recordFailedPinAttempt(householdId)) {
+        return NextResponse.json({ error: "Too many PIN attempts. Try again in a few minutes." }, { status: 429 });
+      }
       return NextResponse.json({ error: "Incorrect PIN" }, { status: 401 });
     }
+
+    await db`DELETE FROM household_pin_attempts WHERE household_id = ${householdId}`;
 
     const parent = await getPrimaryParent(householdId);
     if (!parent) {

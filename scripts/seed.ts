@@ -7,7 +7,8 @@ const sql = postgres(url);
 const existing = await sql<{ id: string }[]>`SELECT id FROM households LIMIT 1`;
 if (existing[0]) { console.info("A household already exists; seed skipped."); await sql.end(); process.exit(0); }
 
-const initialPin = process.env.PARENT_PIN || process.env.INITIAL_PIN || "1234";
+const initialPin = process.env.PARENT_PIN || process.env.INITIAL_PIN;
+if (!initialPin) throw new Error("PARENT_PIN or INITIAL_PIN is required when seeding a household");
 const pin = await hash(initialPin);
 const password = await hash("homeboard-demo");
 const [home] = await sql<{ id: string }[]>`INSERT INTO households (name, timezone, fridge_pin_hash) VALUES ('The Johnson Home', 'America/Chicago', ${pin}) RETURNING id`;

@@ -27,7 +27,7 @@ export type DashboardData = {
     ownerColor: string | null;
     completedSteps: number;
     totalSteps: number;
-    steps: { id: string; title: string; completed: boolean }[];
+    steps: { id: string; title: string; icon: string | null; completed: boolean }[];
   }[];
   generatedAt: string;
 };
@@ -47,7 +47,6 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
   const household = householdRows[0];
   if (!household) throw new Error("Household not found");
   const today = dateInTimezone(new Date(), household.timezone);
-  const weekFromToday = dateInTimezone(new Date(Date.now() + 7 * 86_400_000), household.timezone);
   const weekEndsOn = sundayOfWeek(today);
   const [children, choreRows, routineRows] = await Promise.all([
     db<{ id: string; display_name: string; color: string; avatar_url: string | null }[]>`
@@ -70,21 +69,18 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       WHERE co.household_id = ${householdId}
         AND (
           (co.scheduled_for <= ${today} AND o.status IN ('open', 'pending', 'rejected'))
-          OR (ct.is_flexible = true AND co.scheduled_for >= ${today} AND co.scheduled_for <= ${weekFromToday} AND o.status IN ('open', 'pending', 'rejected'))
+          OR (ct.is_flexible = true AND co.scheduled_for >= ${today} AND co.scheduled_for <= ${weekEndsOn} AND o.status IN ('open', 'pending', 'rejected'))
           OR (o.rescheduled_from_obligation_id IS NOT NULL AND co.scheduled_for >= ${today} AND co.scheduled_for <= ${weekEndsOn} AND o.status IN ('open', 'pending', 'rejected'))
           OR (
             o.status = 'completed' AND (
-              co.scheduled_for = ${today}
-              OR (
-                ct.is_flexible = true
-                AND (o.completed_at AT TIME ZONE ${household.timezone})::date = ${today}
-              )
+              (ct.is_flexible = false AND co.scheduled_for = ${today})
+              OR (ct.is_flexible = true AND (o.completed_at AT TIME ZONE ${household.timezone})::date = ${today})
             )
           )
         )
       ORDER BY (CASE WHEN o.status = 'completed' THEN 1 ELSE 0 END), co.scheduled_for, co.due_at NULLS LAST, ct.title`,
-    db<{ run_id: string; title: string; icon: string | null; owner: string | null; owner_id: string | null; owner_color: string | null; step_id: string; step_title: string; completed: boolean }[]>`
-      SELECT rr.id AS run_id, rt.title, rt.icon, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title,
+    db<{ run_id: string; title: string; icon: string | null; owner: string | null; owner_id: string | null; owner_color: string | null; step_id: string; step_title: string; step_icon: string | null; completed: boolean }[]>`
+      SELECT rr.id AS run_id, rt.title, rt.icon, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title, rs.icon AS step_icon,
         (rsc.id IS NOT NULL) AS completed
       FROM routine_runs rr
       JOIN routine_templates rt ON rt.id = rr.routine_template_id
@@ -126,7 +122,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
     };
     value.totalSteps += 1;
     if (row.completed) value.completedSteps += 1;
-    value.steps.push({ id: row.step_id, title: row.step_title, completed: row.completed });
+    value.steps.push({ id: row.step_id, title: row.step_title, icon: row.step_icon, completed: row.completed });
     routines.set(row.run_id, value);
   }
   return {

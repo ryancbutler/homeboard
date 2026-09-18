@@ -147,6 +147,7 @@ CREATE TABLE routine_steps (
   routine_template_id uuid NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE,
   position integer NOT NULL,
   title text NOT NULL,
+  icon text,
   UNIQUE (routine_template_id, position)
 );
 

@@ -409,7 +409,7 @@ export function Homeboard() {
                         className={`child-task-card ${step.completed ? "task-done" : ""}`}
                       >
                         <span className={`task-icon-badge ${step.completed ? "done" : ""}`} aria-hidden="true">
-                          {getTaskIcon(step.title)}
+                          {getTaskIcon(step.title, step.icon)}
                         </span>
                         <div className="task-card-content">
                           <span className={`task-title-text ${step.completed ? "strikethrough" : ""}`}>{step.title}</span>
