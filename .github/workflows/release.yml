@@ -34,7 +34,7 @@ jobs:
 
       - name: Create GitHub release
         id: release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           TAG: v${{ steps.version.outputs.value }}
         with:
