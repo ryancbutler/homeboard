@@ -7,6 +7,7 @@ import { materializeRoutines } from "@/lib/recurrence";
 
 const schema = z.object({
   title: z.string().trim().min(1).max(120),
+  icon: z.string().trim().max(50).nullable().optional(),
   assigneeIds: z.array(z.string().uuid()).default([]),
   schedule: z.object({
     kind: z.enum(["once", "daily", "weekdays", "weekly"]),
@@ -23,6 +24,7 @@ export async function GET() {
     const templates = await db<{
       id: string;
       title: string;
+      icon: string | null;
       assignment_policy: string;
       schedule_kind: string;
       start_date: string;
@@ -30,7 +32,7 @@ export async function GET() {
       weekdays: number[];
       active: boolean;
     }[]>`
-      SELECT id, title, assignment_policy, schedule_kind, start_date, due_time,
+      SELECT id, title, icon, assignment_policy, schedule_kind, start_date, due_time,
              COALESCE(weekdays, '{}') AS weekdays, active
       FROM routine_templates
       WHERE household_id = ${context.householdId} AND active = true
@@ -72,6 +74,7 @@ export async function GET() {
     return NextResponse.json(templates.map((t) => ({
       id: t.id,
       title: t.title,
+      icon: t.icon,
       assignmentPolicy: t.assignment_policy,
       scheduleKind: t.schedule_kind,
       startDate: t.start_date,
@@ -92,8 +95,8 @@ export async function POST(request: Request) {
     const policy = input.assigneeIds.length > 0 ? "every" : "any";
 
     const [template] = await db<{ id: string }[]>`
-      INSERT INTO routine_templates (household_id, title, assignment_policy, schedule_kind, start_date, due_time, weekdays)
-      VALUES (${context.householdId}, ${input.title}, ${policy}, ${input.schedule.kind}, ${input.schedule.startDate}, ${input.schedule.dueTime ?? null}, ${input.schedule.weekdays})
+      INSERT INTO routine_templates (household_id, title, icon, assignment_policy, schedule_kind, start_date, due_time, weekdays)
+      VALUES (${context.householdId}, ${input.title}, ${input.icon ?? null}, ${policy}, ${input.schedule.kind}, ${input.schedule.startDate}, ${input.schedule.dueTime ?? null}, ${input.schedule.weekdays})
       RETURNING id`;
 
     for (const memberId of input.assigneeIds) {

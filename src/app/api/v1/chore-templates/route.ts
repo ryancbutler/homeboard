@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireContext } from "@/lib/auth";
 import { apiError } from "@/lib/http";
 import { materializeChores } from "@/lib/recurrence";
-import { resolveChoreAssignees } from "@/lib/chore-assignment";
+import { normalizeChoreAssignmentPolicy, resolveChoreAssignees } from "@/lib/chore-assignment";
 import { scheduleSchema } from "@/lib/schedule-validation";
 
 export const dynamic = "force-dynamic";
@@ -82,19 +82,11 @@ export async function POST(request: Request) {
       groupAssigneeId = group.assigned_member_id;
     }
 
-    // Auto-resolve policy if not explicitly set or mismatched
-    let policy = input.assignmentPolicy ?? "individual";
-    if (!input.groupId) {
-      if (input.assigneeIds.length > 1 && policy === "individual") {
-        policy = "every";
-      } else if (input.assigneeIds.length === 1) {
-        policy = "individual";
-      } else if (input.assigneeIds.length === 0) {
-        policy = "any";
-      }
-    } else {
-      policy = "individual";
-    }
+    const policy = normalizeChoreAssignmentPolicy(
+      input.assignmentPolicy ?? "individual",
+      input.assigneeIds,
+      Boolean(input.groupId)
+    );
 
     const assigneeIds = resolveChoreAssignees(policy, input.assigneeIds, groupAssigneeId);
 

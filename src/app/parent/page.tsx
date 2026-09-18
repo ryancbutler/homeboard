@@ -35,6 +35,7 @@ type Member = { id: string; role: string; displayName: string; email: string | n
 type ReportRow = {
   obligation_id: string;
   scheduled_for: string;
+  history_date: string;
   title: string;
   child: string | null;
   status: string;
@@ -80,6 +81,7 @@ type ChoreTemplate = {
 type RoutineTemplate = {
   id: string;
   title: string;
+  icon: string | null;
   assignmentPolicy: string;
   scheduleKind: string;
   startDate: string;
@@ -147,8 +149,22 @@ export default function ParentPage() {
   const [editingRoutine, setEditingRoutine] = useState<RoutineTemplate | null>(null);
   const [routineScheduleKind, setRoutineScheduleKind] = useState("daily");
   const [routineWeekdays, setRoutineWeekdays] = useState<number[]>([1]);
+  const [routineTitleInput, setRoutineTitleInput] = useState("");
+  const [routineIcon, setRoutineIcon] = useState("");
+  const [routineIconFilter, setRoutineIconFilter] = useState("");
   const [routineAssigneeIds, setRoutineAssigneeIds] = useState<string[]>([]);
   const [routineSteps, setRoutineSteps] = useState<string[]>(["", "", ""]);
+  const filteredRoutineIcons = useMemo(() => {
+    const q = routineIconFilter.trim().toLowerCase();
+    if (!q) return CHORE_ICONS;
+    return CHORE_ICONS.filter(
+      (icon) =>
+        icon.id.toLowerCase().includes(q) ||
+        icon.label.toLowerCase().includes(q) ||
+        (icon.category && icon.category.toLowerCase().includes(q)) ||
+        (icon.keywords && icon.keywords.some((k) => k.toLowerCase().includes(q)))
+    );
+  }, [routineIconFilter]);
 
   // History filtering & sorting state
   const [historyChildFilter, setHistoryChildFilter] = useState("all");
@@ -255,7 +271,8 @@ export default function ParentPage() {
     const title = String(form.get("title"));
     const instructions = form.get("instructions") ? String(form.get("instructions")) : undefined;
     const approvalRequired = choreApprovalRequired;
-    const groupId = choreSelectedGroupId || undefined;
+    // `null` is meaningful on PATCH: it removes an existing group assignment.
+    const groupId = choreSelectedGroupId || null;
 
     // Auto-resolve policy
     let policy = chorePolicy;
@@ -307,8 +324,11 @@ export default function ParentPage() {
   // Routine handlers
   const startEditRoutine = (routine: RoutineTemplate) => {
     setEditingRoutine(routine);
+    setRoutineTitleInput(routine.title);
     setRoutineScheduleKind(routine.scheduleKind);
     setRoutineWeekdays(routine.weekdays?.length ? routine.weekdays : [1]);
+    setRoutineIcon(routine.icon ?? "");
+    setRoutineIconFilter("");
     setRoutineAssigneeIds(routine.assignees.map((a) => a.id));
     setRoutineSteps(routine.steps.length ? routine.steps.map((s) => s.title) : [""]);
     setActiveTab("routines");
@@ -317,8 +337,11 @@ export default function ParentPage() {
 
   const cancelEditRoutine = () => {
     setEditingRoutine(null);
+    setRoutineTitleInput("");
     setRoutineScheduleKind("daily");
     setRoutineWeekdays([1]);
+    setRoutineIcon("");
+    setRoutineIconFilter("");
     setRoutineAssigneeIds([]);
     setRoutineSteps(["", "", ""]);
   };
@@ -338,6 +361,7 @@ export default function ParentPage() {
     void perform("routine-save", async () => {
       const payload = {
         title,
+        icon: routineIcon || null,
         assigneeIds: routineAssigneeIds,
         steps: validSteps,
         schedule: {
@@ -490,7 +514,7 @@ export default function ParentPage() {
     }).sort((a, b) => {
       let cmp = 0;
       if (historySortBy === "date") {
-        cmp = a.scheduled_for.localeCompare(b.scheduled_for);
+        cmp = a.history_date.localeCompare(b.history_date);
       } else if (historySortBy === "chore") {
         cmp = a.title.localeCompare(b.title);
       } else if (historySortBy === "child") {
@@ -501,6 +525,36 @@ export default function ParentPage() {
       return historySortOrder === "asc" ? cmp : -cmp;
     });
   }, [report?.rows, historyChildFilter, historyStatusFilter, historySearch, historySortBy, historySortOrder]);
+
+  // Keep this memo before the PIN-lock return so hook ordering is identical
+  // before and after authentication.
+  const children = members.filter((member) => member.role === "child" && member.active);
+  const pending = dashboard?.chores.filter((chore) => chore.status === "pending") ?? [];
+  const familyToday = useMemo(() => {
+    if (!dashboard) return null;
+
+    const isFinished = (status: string) => status === "completed" || status === "pending";
+    const isStillOpen = (status: string) => status === "open" || status === "rejected";
+
+    return {
+      children: dashboard.children.map((child) => {
+        const chores = dashboard.chores.filter((chore) => chore.assignee?.id === child.id);
+        const routines = dashboard.routines.filter((routine) => routine.ownerId === child.id);
+        const totalRoutineSteps = routines.reduce((total, routine) => total + routine.totalSteps, 0);
+        const completedRoutineSteps = routines.reduce((total, routine) => total + routine.completedSteps, 0);
+
+        return {
+          ...child,
+          totalChores: chores.length,
+          finishedChores: chores.filter((chore) => isFinished(chore.status)).length,
+          openChores: chores.filter((chore) => isStillOpen(chore.status)).length,
+          totalRoutineSteps,
+          completedRoutineSteps
+        };
+      }),
+      sharedOpenChores: dashboard.chores.filter((chore) => !chore.assignee && isStillOpen(chore.status)).length
+    };
+  }, [dashboard]);
 
   if (!authenticated) {
     return <main className="parent-shell pin-lock-shell">
@@ -539,13 +593,6 @@ export default function ParentPage() {
     </main>;
   }
 
-  // Strictly filter to children only (parent excluded from family lists)
-  const children = members.filter((member) => member.role === "child" && member.active);
-  const pending = dashboard?.chores.filter((chore) => chore.status === "pending") ?? [];
-
-  // Daily metrics for today
-  const daily = report?.dailySummary ?? report?.summary;
-
   return <main className="parent-shell">
     <header className="parent-header">
       <div>
@@ -558,20 +605,55 @@ export default function ParentPage() {
 
     {notice && <p className="parent-notice" role="status">{notice}</p>}
 
-    {/* Today's Daily Metrics */}
-    <section className="metrics" aria-label="Today's chore summary">
-      {[
-        ["Assigned today", daily?.total ?? "—"],
-        ["Completed", daily?.completed ?? "—"],
-        ["Waiting approval", daily?.pending ?? "—"],
-        ["Missed", daily?.missed ?? "—"],
-        ["Daily completion", daily ? `${daily.completionRate}%` : "—"]
-      ].map(([label, value]) => (
-        <article key={String(label)}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </article>
-      ))}
+    <section className="family-pulse" aria-labelledby="family-pulse-title">
+      <div className="family-pulse-head">
+        <div>
+          <p className="eyebrow">TODAY AT A GLANCE</p>
+          <h2 id="family-pulse-title">Each child&apos;s day</h2>
+        </div>
+        {pending.length > 0 && (
+          <div className="needs-attention" role="status">
+            <Clock3 size={20} aria-hidden="true" />
+            <div>
+              <span>Needs attention</span>
+              <strong>{pending.length} approval{pending.length === 1 ? "" : "s"} to review</strong>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!familyToday ? <p className="form-hint">Loading today&apos;s family picture…</p> : (
+        <>
+          <div className="parent-progress-grid">
+            {familyToday.children.map((child) => (
+              <article className="parent-progress-card" key={child.id}>
+                <div className="parent-progress-heading">
+                  <span className="parent-progress-avatar" style={{ backgroundColor: child.color }} aria-hidden="true">
+                    {child.name.slice(0, 1)}
+                  </span>
+                  <div>
+                    <h3>{child.name}</h3>
+                    <p>{child.openChores ? `${child.openChores} chore${child.openChores === 1 ? "" : "s"} left` : "Chores are done"}</p>
+                  </div>
+                </div>
+
+                <div className="parent-progress-metric">
+                  <div><span>Chores</span><strong>{child.totalChores ? `${child.finishedChores} / ${child.totalChores}` : "None today"}</strong></div>
+                  {child.totalChores > 0 && <progress value={child.finishedChores} max={child.totalChores} aria-label={`${child.name}: ${child.finishedChores} of ${child.totalChores} chores finished`} />}
+                </div>
+                <div className="parent-progress-metric">
+                  <div><span>Routine steps</span><strong>{child.totalRoutineSteps ? `${child.completedRoutineSteps} / ${child.totalRoutineSteps}` : "None today"}</strong></div>
+                  {child.totalRoutineSteps > 0 && <progress value={child.completedRoutineSteps} max={child.totalRoutineSteps} aria-label={`${child.name}: ${child.completedRoutineSteps} of ${child.totalRoutineSteps} routine steps complete`} />}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {familyToday.sharedOpenChores > 0 && (
+            <p className="shared-work-callout"><Home size={18} aria-hidden="true" />{familyToday.sharedOpenChores} shared or unassigned chore{familyToday.sharedOpenChores === 1 ? "" : "s"} still open</p>
+          )}
+        </>
+      )}
     </section>
 
     {/* Consolidated Layout with Left Sidebar Menu */}
@@ -779,10 +861,10 @@ export default function ParentPage() {
                         : null;
 
                       return (
-                        <tr key={row.obligation_id || `${row.scheduled_for}-${index}`}>
+                        <tr key={row.obligation_id || `${row.history_date}-${index}`}>
                           <td>
                             <div className="history-date-cell">
-                              <span>{row.scheduled_for}</span>
+                              <span>{row.history_date}</span>
                               {completedTime && (
                                 <span className="history-time-tag">
                                   <Clock3 size={11} aria-hidden="true" /> {completedTime}
@@ -1125,8 +1207,38 @@ export default function ParentPage() {
               <h2>{editingRoutine ? `Edit routine: ${editingRoutine.title}` : "New daily routine"}</h2>
               <form onSubmit={saveRoutine}>
                 <label>Routine title
-                  <input required maxLength={120} name="routineTitle" key={editingRoutine?.id} defaultValue={editingRoutine?.title ?? ""} placeholder="e.g. Morning routine, Bedtime checklist" />
+                  <input required maxLength={120} name="routineTitle" value={routineTitleInput} onChange={(e) => setRoutineTitleInput(e.target.value)} placeholder="e.g. Morning routine, Bedtime checklist" />
                 </label>
+
+                <div className="icon-selector-section">
+                  <div className="icon-selector-header">
+                    <span className="form-label-text">Routine icon</span>
+                    <span className="icon-current-preview">
+                      Preview:
+                      <span className="icon-preview-badge">{resolveTaskIcon(routineTitleInput || "Routine", routineIcon || null, 18)}</span>
+                      <small>{routineIcon ? CHORE_ICONS.find((i) => i.id === routineIcon)?.label : "Auto-detected"}</small>
+                    </span>
+                  </div>
+                  <div className="icon-search-wrap">
+                    <Search size={14} className="icon-search-lens" aria-hidden="true" />
+                    <input type="search" className="icon-search-input" placeholder="Search routine icons..." value={routineIconFilter} onChange={(e) => setRoutineIconFilter(e.target.value)} />
+                    {routineIconFilter && <button type="button" className="icon-search-clear" onClick={() => setRoutineIconFilter("")} aria-label="Clear icon search"><X size={13} aria-hidden="true" /></button>}
+                  </div>
+                  <div className="icon-picker-grid">
+                    {!routineIconFilter && (
+                      <button type="button" className={`icon-picker-btn auto ${!routineIcon ? "selected" : ""}`} onClick={() => setRoutineIcon("")} title="Auto-detect icon based on title">
+                        <Sparkles size={16} aria-hidden="true" /><span>Auto</span>
+                      </button>
+                    )}
+                    {filteredRoutineIcons.map(({ id, label, Icon }) => {
+                      const isSelected = routineIcon === id;
+                      return <button type="button" key={id} className={`icon-picker-btn ${isSelected ? "selected" : ""}`} onClick={() => setRoutineIcon(isSelected ? "" : id)} title={label} aria-label={label}><Icon size={18} aria-hidden="true" /></button>;
+                    })}
+                    {filteredRoutineIcons.length === 0 && (
+                      <div className="icon-picker-empty"><span>No icons matching &ldquo;{routineIconFilter}&rdquo;</span><button type="button" className="text-btn" onClick={() => setRoutineIconFilter("")}>Show all icons</button></div>
+                    )}
+                  </div>
+                </div>
 
                 <div className="two-col">
                   <label>Schedule
@@ -1253,21 +1365,24 @@ export default function ParentPage() {
               <div className="template-list">
                 {routineTemplates.map((routine) => (
                   <div className="template-row" key={routine.id}>
-                    <div>
-                      <strong>{routine.title}</strong>
-                      <small>
-                        {routine.scheduleKind}
-                        {routine.scheduleKind === "weekly" && routine.weekdays && ` (${routine.weekdays.map((w) => dayNames[w]?.slice(0, 3)).join(", ")})`}
-                        {" · "}{routine.steps.length} step{routine.steps.length === 1 ? "" : "s"} · Assigned to: {
-                          routine.assignees.length ? routine.assignees.map((a) => a.name).join(", ") : "Unassigned"
-                        }
-                      </small>
-                      <ol className="template-step-preview">
-                        {routine.steps.slice(0, 3).map((s) => (
-                          <li key={s.id}>{s.title}</li>
-                        ))}
-                        {routine.steps.length > 3 && <li>+{routine.steps.length - 3} more</li>}
-                      </ol>
+                    <div className="template-item-main">
+                      <span className="template-icon-badge" aria-hidden="true">{resolveTaskIcon(routine.title, routine.icon, 18)}</span>
+                      <div>
+                        <strong>{routine.title}</strong>
+                        <small>
+                          {routine.scheduleKind}
+                          {routine.scheduleKind === "weekly" && routine.weekdays && ` (${routine.weekdays.map((w) => dayNames[w]?.slice(0, 3)).join(", ")})`}
+                          {" · "}{routine.steps.length} step{routine.steps.length === 1 ? "" : "s"} · Assigned to: {
+                            routine.assignees.length ? routine.assignees.map((a) => a.name).join(", ") : "Unassigned"
+                          }
+                        </small>
+                        <ol className="template-step-preview">
+                          {routine.steps.slice(0, 3).map((s) => (
+                            <li key={s.id}>{s.title}</li>
+                          ))}
+                          {routine.steps.length > 3 && <li>+{routine.steps.length - 3} more</li>}
+                        </ol>
+                      </div>
                     </div>
                     <div className="template-actions">
                       <button

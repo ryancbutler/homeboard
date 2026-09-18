@@ -8,6 +8,7 @@ import { dateInTimezone } from "@/lib/dates";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
+  icon: z.string().trim().max(50).nullable().optional(),
   assigneeIds: z.array(z.string().uuid()).optional(),
   schedule: z.object({
     kind: z.enum(["once", "daily", "weekdays", "weekly"]),
@@ -33,11 +34,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         WHERE id = ${id} AND household_id = ${context.householdId} AND active = true`;
       if (!existing) throw new Error("Routine not found");
 
-      if (input.title || input.schedule || input.assigneeIds) {
+      if (input.title !== undefined || input.icon !== undefined || input.schedule || input.assigneeIds) {
         const policy = (input.assigneeIds && input.assigneeIds.length > 0) ? "every" : "any";
         await tx`
           UPDATE routine_templates
           SET title = COALESCE(${input.title ?? null}, title),
+              icon = ${input.icon === undefined ? db`icon` : input.icon},
               schedule_kind = COALESCE(${input.schedule?.kind ?? null}, schedule_kind),
               start_date = COALESCE(${input.schedule?.startDate ?? null}, start_date),
               due_time = ${input.schedule ? (input.schedule.dueTime ?? null) : db`due_time`},

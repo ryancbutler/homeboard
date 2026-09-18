@@ -21,6 +21,7 @@ export type DashboardData = {
   routines: {
     id: string;
     title: string;
+    icon: string | null;
     owner: string | null;
     ownerId: string | null;
     ownerColor: string | null;
@@ -69,11 +70,19 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         AND (
           (co.scheduled_for <= ${today} AND o.status IN ('open', 'pending', 'rejected'))
           OR (ct.is_flexible = true AND co.scheduled_for >= ${today} AND co.scheduled_for <= ${weekFromToday} AND o.status IN ('open', 'pending', 'rejected'))
-          OR (co.scheduled_for = ${today} AND o.status = 'completed')
+          OR (
+            o.status = 'completed' AND (
+              co.scheduled_for = ${today}
+              OR (
+                ct.is_flexible = true
+                AND (o.completed_at AT TIME ZONE ${household.timezone})::date = ${today}
+              )
+            )
+          )
         )
       ORDER BY (CASE WHEN o.status = 'completed' THEN 1 ELSE 0 END), co.scheduled_for, co.due_at NULLS LAST, ct.title`,
-    db<{ run_id: string; title: string; owner: string | null; owner_id: string | null; owner_color: string | null; step_id: string; step_title: string; completed: boolean }[]>`
-      SELECT rr.id AS run_id, rt.title, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title,
+    db<{ run_id: string; title: string; icon: string | null; owner: string | null; owner_id: string | null; owner_color: string | null; step_id: string; step_title: string; completed: boolean }[]>`
+      SELECT rr.id AS run_id, rt.title, rt.icon, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title,
         (rsc.id IS NOT NULL) AS completed
       FROM routine_runs rr
       JOIN routine_templates rt ON rt.id = rr.routine_template_id
@@ -105,6 +114,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
     const value = routines.get(row.run_id) ?? {
       id: row.run_id,
       title: row.title,
+      icon: row.icon,
       owner: row.owner,
       ownerId: row.owner_id,
       ownerColor: row.owner_color,

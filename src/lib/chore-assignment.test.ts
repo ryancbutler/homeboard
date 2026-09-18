@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveChoreAssignees } from "@/lib/chore-assignment";
+import { normalizeChoreAssignmentPolicy, resolveChoreAssignees } from "@/lib/chore-assignment";
 
 describe("chore group assignments", () => {
   it("uses the group's assignee for grouped chores", () => {
@@ -12,6 +12,10 @@ describe("chore group assignments", () => {
 
   it("only allows one-child chores in a group", () => {
     expect(() => resolveChoreAssignees("every", [], "group-child")).toThrow("Chore groups can only");
+  });
+
+  it("uses an individual policy when moving a chore into a group", () => {
+    expect(normalizeChoreAssignmentPolicy("any", [], true)).toBe("individual");
   });
 
   it("keeps direct assignment rules for ungrouped chores", () => {

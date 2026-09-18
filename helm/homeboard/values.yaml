@@ -1,6 +1,6 @@
 image:
   repository: butlerrc30/homeboard
-  tag: "latest"
+  tag: "v0.2.6"
   # Defaults to "<tag>-tools" when empty. Override only when publishing a custom tooling image tag.
   toolsTag: ""
   pullPolicy: IfNotPresent

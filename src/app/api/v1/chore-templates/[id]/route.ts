@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireContext } from "@/lib/auth";
 import { apiError } from "@/lib/http";
 import { materializeChores } from "@/lib/recurrence";
-import { resolveChoreAssignees } from "@/lib/chore-assignment";
+import { normalizeChoreAssignmentPolicy, resolveChoreAssignees } from "@/lib/chore-assignment";
 import { scheduleSchema } from "@/lib/schedule-validation";
 import { dateInTimezone } from "@/lib/dates";
 
@@ -51,16 +51,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         groupAssigneeId = group.assigned_member_id;
       }
 
-      let policy = input.assignmentPolicy ?? existing.assignment_policy;
-      if (!groupId && input.assigneeIds !== undefined) {
-        if (input.assigneeIds.length > 1 && !input.assignmentPolicy) {
-          policy = "every";
-        } else if (input.assigneeIds.length === 1 && !input.assignmentPolicy) {
-          policy = "individual";
-        } else if (input.assigneeIds.length === 0 && !input.assignmentPolicy) {
-          policy = "any";
-        }
-      }
+      const requestedPolicy = input.assignmentPolicy ?? existing.assignment_policy;
+      const policy = groupId
+        ? normalizeChoreAssignmentPolicy(requestedPolicy, input.assigneeIds, true)
+        : input.assigneeIds !== undefined && input.assignmentPolicy === undefined
+          ? normalizeChoreAssignmentPolicy(requestedPolicy, input.assigneeIds, false)
+          : requestedPolicy;
 
       const updates: {
         title?: string;
@@ -149,9 +145,17 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         DELETE FROM chore_occurrences
         WHERE chore_template_id = ${id} AND scheduled_for >= ${today}`;
 
-      try {
+      // Completed past occurrences are intentionally retained for history.  The
+      // occurrence foreign key is RESTRICT, so attempting the template delete
+      // first would abort this transaction before we could archive the chore.
+      const [retainedOccurrence] = await tx<{ id: string }[]>`
+        SELECT id FROM chore_occurrences
+        WHERE chore_template_id = ${id}
+        LIMIT 1`;
+
+      if (!retainedOccurrence) {
         await tx`DELETE FROM chore_templates WHERE id = ${id}`;
-      } catch {
+      } else {
         await tx`UPDATE chore_templates SET active = false WHERE id = ${id}`;
       }
     });

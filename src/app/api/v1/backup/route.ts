@@ -34,6 +34,7 @@ const importSchema = z.object({
   })).default([]),
   routines: z.array(z.object({
     title: z.string().trim().min(1).max(120),
+    icon: z.string().trim().max(50).nullable().optional(),
     scheduleKind: z.enum(["once", "daily", "weekdays", "weekly"]).default("daily"),
     dueTime: z.string().nullable().optional(),
     weekdays: z.array(z.number().int().min(0).max(6)).default([]),
@@ -65,9 +66,9 @@ export async function GET() {
         WHERE ct.household_id = ${context.householdId} AND ct.active = true
         ORDER BY ct.created_at`,
       db<{
-        id: string; title: string; schedule_kind: string; due_time: string | null; weekdays: number[];
+        id: string; title: string; icon: string | null; schedule_kind: string; due_time: string | null; weekdays: number[];
       }[]>`
-        SELECT rt.id, rt.title, rt.schedule_kind, rt.due_time, COALESCE(rt.weekdays, '{}') AS weekdays
+        SELECT rt.id, rt.title, rt.icon, rt.schedule_kind, rt.due_time, COALESCE(rt.weekdays, '{}') AS weekdays
         FROM routine_templates rt
         WHERE rt.household_id = ${context.householdId} AND rt.active = true
         ORDER BY rt.created_at`
@@ -150,6 +151,7 @@ export async function GET() {
       })),
       routines: routineTemplates.map((r) => ({
         title: r.title,
+        icon: r.icon,
         scheduleKind: r.schedule_kind,
         dueTime: r.due_time,
         weekdays: r.weekdays,
@@ -279,8 +281,8 @@ export async function POST(request: Request) {
         const policy = assigneeIds.length > 0 ? "every" : "any";
 
         const [routineTemplate] = await tx<{ id: string }[]>`
-          INSERT INTO routine_templates (household_id, title, assignment_policy, schedule_kind, start_date, due_time, weekdays)
-          VALUES (${context.householdId}, ${routineInput.title}, ${policy}, ${routineInput.scheduleKind}, ${today}, ${routineInput.dueTime ?? null}, ${routineInput.weekdays})
+          INSERT INTO routine_templates (household_id, title, icon, assignment_policy, schedule_kind, start_date, due_time, weekdays)
+          VALUES (${context.householdId}, ${routineInput.title}, ${routineInput.icon ?? null}, ${policy}, ${routineInput.scheduleKind}, ${today}, ${routineInput.dueTime ?? null}, ${routineInput.weekdays})
           RETURNING id`;
 
         for (const mId of assigneeIds) {

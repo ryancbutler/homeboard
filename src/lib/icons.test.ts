@@ -46,12 +46,14 @@ describe("icons library", () => {
   });
 
   it("identifies dusting and sweeping", () => {
-    expect(inferIconFromTitle("Dust")).toBe("brush");
-    expect(inferIconFromTitle("Dust living room shelves")).toBe("brush");
+    expect(inferIconFromTitle("Dust")).toBe("broom");
+    expect(inferIconFromTitle("Dust living room shelves")).toBe("broom");
     expect(inferIconFromTitle("Sweep kitchen floor")).toBe("utensils"); // contains kitchen
-    expect(inferIconFromTitle("Sweep porch")).toBe("brush");
-    expect(inferIconFromTitle("Vacuum rug")).toBe("brush");
-    expect(inferIconFromTitle("Vaccuum")).toBe("brush");
+    expect(inferIconFromTitle("Sweep porch")).toBe("broom");
+    expect(inferIconFromTitle("Vacuum rug")).toBe("broom");
+    expect(inferIconFromTitle("Vaccuum")).toBe("broom");
+    expect(inferIconFromTitle("Mop the tile floor")).toBe("mop");
+    expect(inferIconFromTitle("Reset Rooms")).toBe("home");
   });
 
   it("identifies balls and toys", () => {

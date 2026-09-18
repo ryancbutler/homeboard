@@ -17,7 +17,6 @@ import {
   Dog,
   Home,
   Leaf,
-  ListChecks,
   Moon,
   RefreshCw,
   RotateCcw,
@@ -83,6 +82,16 @@ export function Homeboard() {
   const [refreshing, setRefreshing] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
 
+  // Apply the mutation response before requesting a new dashboard snapshot.  Some
+  // display devices can take noticeably longer to receive that follow-up request,
+  // so relying on refresh alone leaves the tapped chore looking in-progress.
+  const updateChore = useCallback((id: string, changes: Partial<DashboardData["chores"][number]>) => {
+    setData((previous) => previous ? {
+      ...previous,
+      chores: previous.chores.map((chore) => chore.obligationId === id ? { ...chore, ...changes } : chore)
+    } : previous);
+  }, []);
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -121,8 +130,26 @@ export function Homeboard() {
 
   const openCount = useMemo(() => data?.chores.filter((chore) => chore.status === "open" || chore.status === "rejected").length ?? 0, [data]);
   const pendingCount = data?.chores.filter((chore) => chore.status === "pending").length ?? 0;
-  const routineDone = data?.routines.reduce((count, routine) => count + routine.completedSteps, 0) ?? 0;
-  const routineTotal = data?.routines.reduce((count, routine) => count + routine.totalSteps, 0) ?? 0;
+  const childProgress = useMemo(() => (data?.children ?? []).map((child) => {
+    const chores = data?.chores.filter((chore) =>
+      chore.assignee?.id === child.id || (!chore.assignee && chore.allowedChildren.some((member) => member.id === child.id))
+    ) ?? [];
+    const routines = data?.routines.filter((routine) => {
+      if (routine.ownerId) return routine.ownerId === child.id;
+      const hasAssignedVersion = data?.routines.some((other) => other.title === routine.title && other.ownerId === child.id);
+      return !hasAssignedVersion;
+    }) ?? [];
+    const choresDone = chores.filter((chore) => chore.status === "completed" || chore.status === "pending").length;
+    const choresLeft = chores.filter((chore) => chore.status === "open" || chore.status === "rejected").length;
+    const pending = chores.filter((chore) => chore.status === "pending").length;
+    const routineDone = routines.reduce((count, routine) => count + routine.completedSteps, 0);
+    const routineTotal = routines.reduce((count, routine) => count + routine.totalSteps, 0);
+    const actionsLeft = choresLeft + routineTotal - routineDone;
+    return { child, actionsLeft, choresDone, choresTotal: chores.length, pending, routineDone, routineTotal };
+  }), [data]);
+  const sharedOpenCount = useMemo(() => data?.chores.filter((chore) =>
+    !chore.assignee && chore.policy === "any" && (chore.status === "open" || chore.status === "rejected")
+  ).length ?? 0, [data]);
 
   const hideBanner = async () => {
     setData((prev) => prev ? { ...prev, household: { ...prev.household, showBanner: false } } : null);
@@ -137,18 +164,25 @@ export function Homeboard() {
     if (busy || offline) return;
     setBusy(id);
     try {
-      const result = await api<{ status?: string }>(`/api/v1/obligations/${id}/complete`, {
+      const result = await api<{ status?: string; approval_status?: string }>(`/api/v1/obligations/${id}/complete`, {
         method: "POST",
         headers: { "idempotency-key": crypto.randomUUID() },
         body: JSON.stringify({ actorId })
       });
+      const status = result.status ?? "completed";
+      updateChore(id, {
+        status,
+        approvalStatus: result.approval_status ?? (status === "pending" ? "pending" : "approved"),
+        completedBy: actorId,
+        completedAt: new Date().toISOString()
+      });
       setNotice({
-        title: result.status === "pending" ? "Nice work! Sent for parent approval." : "One less chore. One more little win!",
+        title: status === "pending" ? "Nice work! Sent for parent approval." : "One less chore. One more little win!",
         undoChoreId: id,
         undoChoreTitle: choreTitle
       });
       setChooser(null);
-      await refresh();
+      void refresh();
     } catch (cause) { setNotice({ title: "Couldn't save that", detail: cause instanceof Error ? cause.message : undefined }); }
     finally { setBusy(null); }
   };
@@ -157,9 +191,15 @@ export function Homeboard() {
     if (busy || offline) return;
     setBusy(choreId);
     try {
-      await api(`/api/v1/obligations/${choreId}/undo`, { method: "POST" });
+      const result = await api<{ status?: string }>(`/api/v1/obligations/${choreId}/undo`, { method: "POST" });
+      updateChore(choreId, {
+        status: result.status ?? "open",
+        approvalStatus: "not_required",
+        completedBy: null,
+        completedAt: null
+      });
       setNotice({ title: "Chore restored back to your list!" });
-      await refresh();
+      void refresh();
     } catch (cause) {
       setNotice({ title: "Couldn't undo", detail: cause instanceof Error ? cause.message : undefined });
     } finally {
@@ -227,11 +267,35 @@ export function Homeboard() {
       </section>
     )}
 
-    <section className="board-stats" aria-label="Household overview">
-      <article className="stat-card stat-lilac"><span className="stat-icon"><ListChecks aria-hidden="true" /></span><div><strong>{openCount}</strong><span>Chores to do</span></div><small>One at a time</small></article>
-      <article className="stat-card stat-peach"><span className="stat-icon"><Clock3 aria-hidden="true" /></span><div><strong>{pendingCount}</strong><span>Waiting for approval</span></div><small>Ready for a high five</small></article>
-      <article className="stat-card stat-mint"><span className="stat-icon"><CheckCheck aria-hidden="true" /></span><div><strong>{routineDone}<em> / {routineTotal}</em></strong><span>Routine steps done</span></div><small>Small habits, big wins</small></article>
-    </section>
+    {childProgress.length > 0 && (
+      <section className="daily-progress" aria-label="Today's progress">
+        {childProgress.map(({ child, actionsLeft, choresDone, choresTotal, pending, routineDone, routineTotal }) => (
+          <article
+            key={child.id}
+            className="child-progress-card"
+            style={{ "--child-color": child.color } as React.CSSProperties}
+          >
+            <header className="child-progress-header">
+              <span className="child-progress-avatar" style={{ backgroundColor: child.color }} aria-hidden="true">{initials(child.name)}</span>
+              <div><h2>{child.name}</h2><p>Today’s progress</p></div>
+              <span className={`child-progress-status ${actionsLeft === 0 ? "all-done" : ""}`}>{actionsLeft === 0 ? "All clear" : `${actionsLeft} left`}</span>
+            </header>
+            <div className="child-progress-row">
+              <div className="child-progress-label"><span>Chores</span><strong>{choresTotal ? <>{choresDone} <em>/ {choresTotal} done</em></> : "None today"}</strong></div>
+              <progress className="child-progress-bar" value={choresDone} max={Math.max(choresTotal, 1)} aria-label={`${child.name}: ${choresDone} of ${choresTotal} chores done`} />
+            </div>
+            {routineTotal > 0 && (
+              <div className="child-progress-row">
+                <div className="child-progress-label"><span>Routines</span><strong>{routineDone} <em>/ {routineTotal} steps</em></strong></div>
+                <progress className="child-progress-bar routine-progress-bar" value={routineDone} max={routineTotal} aria-label={`${child.name}: ${routineDone} of ${routineTotal} routine steps done`} />
+              </div>
+            )}
+            {pending > 0 && <p className="child-progress-note"><Clock3 size={13} aria-hidden="true" />{pending} sent to a parent for review</p>}
+          </article>
+        ))}
+        {sharedOpenCount > 0 && <p className="team-progress-note"><Users size={15} aria-hidden="true" />{sharedOpenCount} team chore{sharedOpenCount === 1 ? "" : "s"} available for anyone to pick up.</p>}
+      </section>
+    )}
 
     <section className="child-columns-grid" id="chores" aria-label="Children to-do lists">
       {data.children.length === 0 ? (
@@ -282,7 +346,10 @@ export function Homeboard() {
               {/* Routine Sections */}
               {childRoutines.map((routine) => (
                 <section className="column-task-section" key={`routine-${routine.id}`}>
-                  <h3 className="section-subtitle">{routine.title}</h3>
+                  <h3 className="section-subtitle routine-title">
+                    <span className="routine-title-icon" aria-hidden="true">{getTaskIcon(routine.title, routine.icon)}</span>
+                    {routine.title}
+                  </h3>
                   <div className="task-cards-stack">
                     {routine.steps.map((step) => (
                       <div
@@ -297,7 +364,7 @@ export function Homeboard() {
                         </div>
                         <button
                           type="button"
-                          className={`task-circle-btn ${step.completed ? "checked" : ""}`}
+                          className={`task-checkbox-btn ${step.completed ? "checked" : ""}`}
                           aria-label={step.completed ? `Uncheck ${step.title}` : `Complete ${step.title}`}
                           disabled={offline || Boolean(busy)}
                           onClick={() => void toggleStep(routine.id, step.id, child.id, !step.completed)}
@@ -349,13 +416,13 @@ export function Homeboard() {
                           </div>
                         </div>
                         {chore.status === "pending" ? (
-                          <span className="task-circle-btn pending" title="Awaiting parent approval">
+                          <span className="task-checkbox-btn pending" title="Awaiting parent approval">
                             <Clock3 size={15} aria-hidden="true" />
                           </span>
                         ) : (
                           <button
                             type="button"
-                            className="task-circle-btn"
+                            className="task-checkbox-btn"
                             aria-label={`Mark ${chore.title} done`}
                             disabled={offline || Boolean(busy)}
                             onClick={() => {

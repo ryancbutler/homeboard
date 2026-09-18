@@ -38,6 +38,7 @@ import {
   Music,
   Package,
   Palette,
+  PaintbrushVertical,
   Pencil,
   PiggyBank,
   Pill,
@@ -75,6 +76,8 @@ export const CHORE_ICONS: ChoreIconDef[] = [
   // 1. Cleaning & Chores
   { id: "sparkles", label: "Clean / Tidy", Icon: Sparkles, category: "cleaning", keywords: ["clean", "tidy", "organize", "reset", "room", "shine"] },
   { id: "brush", label: "Dust & Sweep", Icon: Brush, category: "cleaning", keywords: ["sweep", "dust", "broom", "vacuum", "mop", "wipe", "floor"] },
+  { id: "broom", label: "Broom & Sweep", Icon: Brush, category: "cleaning", keywords: ["broom", "sweep", "sweeping", "dust", "vacuum", "floor", "bristles"] },
+  { id: "mop", label: "Mop & Scrub", Icon: PaintbrushVertical, category: "cleaning", keywords: ["mop", "mopping", "scrub", "bucket", "floor", "tile", "cleaning"] },
   { id: "spray-can", label: "Spray & Wipe", Icon: SprayCan, category: "cleaning", keywords: ["spray", "disinfect", "sanitize", "counter", "wipe", "table", "cleaner"] },
   { id: "trash", label: "Trash & Waste", Icon: Trash2, category: "cleaning", keywords: ["trash", "garbage", "rubbish", "bin", "can", "dump", "empty"] },
   { id: "recycle", label: "Recycling & Sort", Icon: Recycle, category: "cleaning", keywords: ["recycle", "recycling", "sort", "compost", "cardboard", "plastic", "green bin", "blue bin"] },
@@ -189,16 +192,19 @@ export function inferIconFromTitle(title: string): string {
     return "spray-can";
   }
 
+  if (t.includes("mop") || t.includes("scrub")) {
+    return "mop";
+  }
+
   if (
     t.includes("dust") ||
     t.includes("sweep") ||
-    t.includes("mop") ||
+    t.includes("broom") ||
     t.includes("vacuum") ||
     t.includes("vaccu") ||
-    t.includes("broom") ||
     t.includes("wipe")
   ) {
-    return "brush";
+    return "broom";
   }
 
   // 4. Recycling specifically before trash
@@ -404,7 +410,10 @@ export function inferIconFromTitle(title: string): string {
   if (t.includes("morning") || t.includes("wake") || t.includes("rise")) return "sunrise";
   if (t.includes("night") || t.includes("sleep") || t.includes("evening") || t.includes("bedtime")) return "moon";
 
-  // 23. Cleaning / Tidying
+  // 23. Rooms are household-level tasks, not generic cleaning.
+  if (/\brooms?\b/.test(t)) return "home";
+
+  // 24. Cleaning / Tidying
   if (
     t.includes("clean") ||
     t.includes("tidy") ||
