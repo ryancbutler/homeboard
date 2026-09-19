@@ -16,6 +16,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions and the pull-
 - Export and import household setup, including children, groups, rotations, chores, and routines. Completion history is not imported or overwritten.
 - Keep an audit trail for key household-management actions.
 
+## License
+
+Homeboard is available under the [MIT License](LICENSE).
+
 ## Architecture
 
 ```mermaid
