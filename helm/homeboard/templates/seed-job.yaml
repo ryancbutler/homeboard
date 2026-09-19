@@ -17,9 +17,21 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["node", "dist/scripts/seed.js"]
           env:
+            {{- if eq (include "homeboard.usesSecretDatabaseUrl" .) "true" }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.secrets.existingSecret }}
                   key: {{ .Values.secrets.databaseUrlKey }}
+            {{- else }}
+            - { name: DATABASE_URL, value: {{ include "homeboard.databaseUrl" . | quote }} }
+            {{- end }}
+          {{- if eq (include "homeboard.usesSqlite" .) "true" }}
+          volumeMounts: [{ name: sqlite-data, mountPath: /data }]
+          {{- end }}
+      {{- if eq (include "homeboard.usesSqlite" .) "true" }}
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim: { claimName: {{ include "homeboard.fullname" . }}-sqlite }
+      {{- end }}
 {{- end }}

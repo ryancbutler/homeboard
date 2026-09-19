@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { databaseDialect, db } from "@/lib/db";
 import { dateInTimezone, dueAt, scheduledDays, type Schedule } from "@/lib/dates";
 import { rotationAssignee, type ChoreGroupRotation } from "@/lib/chore-group-rotation";
 
@@ -53,6 +53,14 @@ export async function materializeChores(until = new Date(Date.now() + 30 * 86_40
 }
 
 export async function markMissed() {
+  if (databaseDialect === "sqlite") {
+    await db`
+      UPDATE chore_obligations SET status = 'missed'
+      WHERE status IN ('open', 'rejected') AND occurrence_id IN (
+        SELECT id FROM chore_occurrences WHERE scheduled_for < date('now')
+      )`;
+    return;
+  }
   await db`
     UPDATE chore_obligations o SET status = 'missed'
     FROM chore_occurrences c, households h

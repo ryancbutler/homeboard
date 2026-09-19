@@ -1,0 +1,18 @@
+{{- if eq (include "homeboard.usesSqlite" .) "true" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "homeboard.fullname" . }}-sqlite
+  # The migration hook needs the volume before ordinary release resources are created.
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-2"
+spec:
+  accessModes: {{- toYaml .Values.sqlite.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.sqlite.persistence.size }}
+  {{- with .Values.sqlite.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

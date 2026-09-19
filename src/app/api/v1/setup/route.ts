@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hashSecret, setSession } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { databaseDialect, db } from "@/lib/db";
 import { apiError } from "@/lib/http";
 
 const setupSchema = z.object({
@@ -15,7 +15,11 @@ export async function POST(request: Request) {
     const input = setupSchema.parse(await request.json());
     const pinHash = await hashSecret(input.pin);
     const result = await db.begin(async (sql) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtext('homeboard-initial-setup'))`;
+      // SQLite's write transaction already serializes this setup path. PostgreSQL
+      // retains its advisory lock for deployments sharing a server.
+      if (databaseDialect === "postgres") {
+        await sql`SELECT pg_advisory_xact_lock(hashtext('homeboard-initial-setup'))`;
+      }
       const [existing] = await sql<{ id: string }[]>`SELECT id FROM households ORDER BY created_at LIMIT 1`;
       if (existing) return null;
 
