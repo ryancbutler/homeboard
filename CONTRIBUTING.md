@@ -1,7 +1,7 @@
 # Contributing to Homeboard
 
-Thank you for improving Homeboard. This repository is a private household project;
-please keep changes focused, tested, and safe to deploy.
+Thank you for improving Homeboard. Please keep changes focused, tested, and
+safe to deploy for self-hosted households.
 
 ## Development setup
 

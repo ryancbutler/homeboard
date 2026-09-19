@@ -249,7 +249,7 @@ function ParentContent() {
 
     <footer className="board-footer">
       <span><Home size={16} aria-hidden="true" />homeboard</span>
-      <p>A happy home is a team effort.</p>
+      <p>© 2026 Ryan Butler · A happy home is a team effort.</p>
     </footer>
     <dialog
       ref={rescheduleModalRef}

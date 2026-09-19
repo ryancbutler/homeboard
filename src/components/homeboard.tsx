@@ -589,7 +589,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
     <footer className="board-footer">
       <span><Home size={16} aria-hidden="true" />homeboard</span>
       <p>A happy home is a team effort.</p>
-      <span className="footer-note">Made for your everyday</span>
+      <span className="footer-note">© 2026 Ryan Butler · Made for your everyday</span>
     </footer>
 
     {notice && (
