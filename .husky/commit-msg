@@ -1,0 +1,1 @@
+npm run validate:commit-message -- "$1"

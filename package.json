@@ -16,7 +16,14 @@
     "worker": "tsx src/worker.ts",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "format": "prettier --write .",
+    "format:staged": "node scripts/format-staged.mjs",
+    "validate:release": "node scripts/validate-release.mjs",
+    "validate:migrations": "node scripts/validate-migrations.mjs",
+    "validate:migrations:staged": "node scripts/validate-migrations.mjs --staged",
+    "validate:commit-message": "node scripts/validate-commit-message.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
@@ -35,6 +42,8 @@
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
     "esbuild": "^0.28.2",
+    "husky": "^9.1.7",
+    "prettier": "^3.9.8",
     "tsx": "^4.19.2",
     "typescript": "^7.0.0",
     "vite": "^8.0.0",

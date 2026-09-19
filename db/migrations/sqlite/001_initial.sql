@@ -1,5 +1,6 @@
 PRAGMA foreign_keys = ON;
 
+-- PostgreSQL migration baseline: 012
 -- SQLite uses TEXT for UUIDs, dates, timestamps, JSON arrays, and enum values.
 -- CHECK constraints retain the PostgreSQL enum invariants without a separate type.
 CREATE TABLE households (id text PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab',abs(random()) % 4 + 1,1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))), name text NOT NULL, timezone text NOT NULL DEFAULT 'America/Chicago', fridge_pin_hash text, created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP, subheading text NOT NULL DEFAULT 'Your people. Your little wins. Your home, together.', show_banner integer NOT NULL DEFAULT 1);

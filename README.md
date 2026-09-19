@@ -4,7 +4,6 @@ Homeboard is a portrait-first household dashboard and chore manager for shared d
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions and the pull-request checklist.
 
-
 <img src="public/screenshots/dashboard.png" alt="Seeded Homeboard dashboard showing chore progress and each child's to-do list" width="720">
 
 ## Features
@@ -155,6 +154,17 @@ helm upgrade --install homeboard ./helm/homeboard \
 ```
 
 By default, the chart does not seed demo data. A fresh deployment instead uses the first-run setup flow. Keep `config.allowDemo` set to `false` in production.
+
+### Local quality checks
+
+`npm ci` enables the repository's Git hooks automatically. They format staged supported files and validate release versions and database migrations before each commit; they also require conventional commit subjects and run tests plus TypeScript checking before a push. Bypass a hook only for an emergency with Git's `--no-verify` flag, then run the skipped command promptly.
+
+SQLite is maintained as a fresh-install schema snapshot. When adding a PostgreSQL migration, update `db/migrations/sqlite/001_initial.sql` and its `PostgreSQL migration baseline` comment in the same commit. Run the validators directly when needed:
+
+```bash
+npm run validate:release
+npm run validate:migrations
+```
 
 ### Releases
 
