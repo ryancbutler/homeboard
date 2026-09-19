@@ -106,6 +106,21 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
     } : previous);
   }, []);
 
+  const updateRoutineStep = useCallback((runId: string, stepId: string, completed: boolean) => {
+    setData((previous) => previous ? {
+      ...previous,
+      routines: previous.routines.map((routine) => {
+        if (routine.id !== runId) return routine;
+        const wasCompleted = routine.steps.find((step) => step.id === stepId)?.completed;
+        return {
+          ...routine,
+          completedSteps: routine.completedSteps + (wasCompleted === completed ? 0 : completed ? 1 : -1),
+          steps: routine.steps.map((step) => step.id === stepId ? { ...step, completed } : step)
+        };
+      })
+    } : previous);
+  }, []);
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -262,8 +277,9 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
         method: "POST",
         body: JSON.stringify({ actorId: actorId || undefined, completed })
       });
+      updateRoutineStep(runId, stepId, completed);
       setChooser(null);
-      await refresh();
+      void refresh();
     } catch (cause) { setNotice({ title: "Couldn't update routine", detail: cause instanceof Error ? cause.message : undefined }); }
     finally { setBusy(null); }
   };
