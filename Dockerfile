@@ -20,7 +20,7 @@ RUN npm run build:tools
 FROM base AS production-dependencies
 WORKDIR /app
 COPY package.json package-lock.json* .npmrc ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 FROM base AS runtime-web
 WORKDIR /app
