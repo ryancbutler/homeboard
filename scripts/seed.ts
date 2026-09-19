@@ -1,9 +1,9 @@
 import { hash } from "@node-rs/argon2";
-import postgres from "postgres";
+import { db } from "../src/lib/db.js";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
-const sql = postgres(url);
+const sql = db;
 const existing = await sql<{ id: string }[]>`SELECT id FROM households LIMIT 1`;
 if (existing[0]) { console.info("A household already exists; seed skipped."); await sql.end(); process.exit(0); }
 

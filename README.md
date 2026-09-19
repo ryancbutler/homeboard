@@ -36,7 +36,7 @@ graph TD
 ### Prerequisites
 
 - Node.js 24.21.x and npm 12.x (see `.nvmrc` and `package.json`)
-- A running PostgreSQL 16 database
+- PostgreSQL 16 or SQLite (Docker Compose can provide either option)
 
 Install the locked dependency set and configure the database:
 
@@ -47,7 +47,7 @@ npm ci
 cp .env.example .env.local
 ```
 
-Set `DATABASE_URL` in `.env.local` to the connection string for your local database. The example points to a PostgreSQL instance at `localhost:5432` with database, user, and password all set to `homeorg`.
+Set `DATABASE_URL` in `.env.local` to a PostgreSQL connection string or a SQLite file URL. For example, use `file:./homeboard.db` for a local SQLite database or `postgres://USER:PASSWORD@HOST:5432/DATABASE_NAME` for PostgreSQL.
 
 Apply migrations, then start the app and scheduler in separate terminals:
 
@@ -74,22 +74,49 @@ npm run db:seed
 
 The seeded parent account is `parent@example.com` with password `homeboard-demo`; the current UI unlocks Parent mode with the household PIN. Do not use these credentials outside local development.
 
-## Docker Compose demo stack
+## Docker Compose stacks
 
-`docker-compose.yml` is a ready-to-run local demo stack. It creates PostgreSQL data in the `postgres-data` volume, runs migrations and the seed job, exposes the app on port 3000, and starts the worker.
+Two local Compose configurations are provided. Run only one at a time because both expose port 3000.
+
+### SQLite demo
+
+[`docker-compose.yml`](docker-compose.yml) is the ready-to-run demo stack. It persists SQLite data in the `sqlite-data` volume, applies migrations, seeds the Johnson household, exposes the app on port 3000, and starts the worker.
 
 ```bash
 docker compose up -d --build
 docker compose ps
 ```
 
-It intentionally uses fixed development credentials, PIN `1234`, and `ALLOW_DEMO=true`; it is not a production configuration and should not be exposed to an untrusted network. To start over locally, stop the stack and remove the named `postgres-data` volume only after confirming that you no longer need its data.
+It intentionally uses fixed development credentials, PIN `1234`, and `ALLOW_DEMO=true`; it is not a production configuration and should not be exposed to an untrusted network. To start over locally, stop the stack and remove the named `sqlite-data` volume only after confirming that you no longer need its data:
+
+```bash
+docker compose down
+docker volume rm home-org_sqlite-data
+```
+
+### PostgreSQL, empty database
+
+[`docker-compose.postgres.yml`](docker-compose.postgres.yml) starts a PostgreSQL 16 container, applies migrations, starts the web app and worker, and leaves the database empty. It does not enable demo mode and does not run the seed script. Visit `http://localhost:3000` to complete first-run household setup.
+
+```bash
+docker compose -f docker-compose.postgres.yml up -d --build
+docker compose -f docker-compose.postgres.yml ps
+```
+
+To discard its local PostgreSQL data after stopping it:
+
+```bash
+docker compose -f docker-compose.postgres.yml down
+docker volume rm home-org_postgres-data
+```
 
 ## Kubernetes with Helm
 
-The chart at [`helm/homeboard`](helm/homeboard) deploys the web application, one worker, and a pre-install/pre-upgrade migration job. It expects an external PostgreSQL database and a pre-existing Kubernetes Secret. The sample chart defaults are appropriate only as a starting point; set your ingress host and image tag before installing.
+The chart at [`helm/homeboard`](helm/homeboard) deploys the web application, one worker, and a migration job. By default it provisions a 1 GiB ReadWriteOnce PVC and uses SQLite at `file:/data/homeboard.db`. It still requires a pre-existing Secret for `SESSION_SECRET`.
 
-Create a Secret containing the required keys:
+To retain an existing PostgreSQL deployment, keep `secrets.databaseUrlKey` set to the key that contains `DATABASE_URL` (as in the existing `helm-values.yaml`). That takes precedence over the SQLite default; no current values changes are needed.
+
+For PostgreSQL, create a Secret containing the required keys:
 
 ```bash
 kubectl create namespace homeboard

@@ -1,0 +1,56 @@
+# PostgreSQL development stack with an empty Homeboard database. Complete the
+# first-run setup in the browser; this file deliberately has no seed service.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: homeorg
+      POSTGRES_USER: homeorg
+      POSTGRES_PASSWORD: homeorg
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homeorg -d homeorg"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  migrate:
+    build:
+      context: .
+      target: runtime-tools
+    command: ["node", "dist/scripts/migrate.js"]
+    environment: &homeboard-env
+      DATABASE_URL: postgres://homeorg:homeorg@postgres:5432/homeorg
+      SESSION_SECRET: local-development-only-change-me-please
+      ALLOW_DEMO: "false"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    build:
+      context: .
+      target: runtime-web
+    restart: unless-stopped
+    environment: *homeboard-env
+    ports: ["3000:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      target: runtime-tools
+    restart: unless-stopped
+    command: ["node", "dist/src/worker.js"]
+    environment: *homeboard-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  postgres-data:

@@ -1,10 +1,12 @@
 image:
   repository: butlerrc30/homeboard
-  tag: "v0.2.21"
+  tag: "v0.2.22"
   # Defaults to "<tag>-tools" when empty. Override only when publishing a custom tooling image tag.
   toolsTag: ""
   pullPolicy: IfNotPresent
-replicaCount: 2
+# SQLite uses a single ReadWriteOnce volume by default. PostgreSQL deployments can
+# continue to set replicaCount independently in their existing values file.
+replicaCount: 1
 service:
   port: 3000
 ingress:
@@ -14,18 +16,24 @@ ingress:
   tlsSecret: ""
 config:
   appName: Homeboard
+  # A non-empty URL selects PostgreSQL (or another libSQL endpoint). Leave empty
+  # to use the SQLite PVC. Existing secret.databaseUrlKey values are also honored.
   databaseUrl: ""
   allowDemo: false
 secrets:
   existingSecret: homeboard-secrets
-  databaseUrlKey: DATABASE_URL
+  # Set this to an existing secret key to keep the current PostgreSQL setup.
+  databaseUrlKey: ""
   sessionSecretKey: SESSION_SECRET
+sqlite:
+  persistence:
+    enabled: true
+    size: 1Gi
+    accessModes: [ReadWriteOnce]
+    storageClass: ""
 resources:
   web: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 512Mi } }
   worker: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 256Mi } }
-postgres:
-  enabled: false
-  # Use a managed or separately deployed PostgreSQL service in production.
 seed:
   # Creates the sample household only when no household exists.
   enabled: false
