@@ -15,6 +15,7 @@ garage/garage.toml
 # Source-control and local development files.
 .git
 .gitignore
+.agents
 .vscode
 .idea
 *.log

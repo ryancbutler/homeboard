@@ -2,6 +2,8 @@
 
 Homeboard is a portrait-first household dashboard and chore manager for shared displays, tablets, desktops, and phones. Children can follow routines and complete chores; parents can manage the household from a PIN-protected console.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions and the pull-request checklist.
+
 
 <img src="public/screenshots/dashboard.png" alt="Seeded Homeboard dashboard showing chore progress and each child's to-do list" width="720">
 
@@ -140,7 +142,7 @@ helm lint helm/homeboard
 helm template homeboard helm/homeboard --namespace homeboard > /dev/null
 ```
 
-After publishing `butlerrc30/homeboard:vX.Y.Z` and `butlerrc30/homeboard:vX.Y.Z-tools` and creating the matching GitHub release/tag, upgrade production without replacing namespace-specific values:
+Merge the release PR into `main`. The release workflow validates the merged revision, creates the matching GitHub release and tag, and publishes `butlerrc30/homeboard:vX.Y.Z` plus `butlerrc30/homeboard:vX.Y.Z-tools`. After it succeeds, upgrade production without replacing namespace-specific values:
 
 ```bash
 helm upgrade homeboard ./helm/homeboard \
