@@ -10,4 +10,9 @@ file:/data/homeboard.db
 {{- end -}}
 {{- end -}}
 {{- define "homeboard.usesSecretDatabaseUrl" -}}{{- if and (not .Values.config.databaseUrl) .Values.secrets.databaseUrlKey -}}true{{- end -}}{{- end -}}
-{{- define "homeboard.usesSqlite" -}}{{- if and (not .Values.config.databaseUrl) (not .Values.secrets.databaseUrlKey) .Values.sqlite.persistence.enabled -}}true{{- end -}}{{- end -}}
+{{- define "homeboard.usesSqlite" -}}
+{{- $sqlite := default (dict) .Values.sqlite -}}
+{{- $persistence := default (dict) $sqlite.persistence -}}
+{{- $enabled := default true $persistence.enabled -}}
+{{- if and (not .Values.config.databaseUrl) (not .Values.secrets.databaseUrlKey) $enabled -}}true{{- end -}}
+{{- end -}}
