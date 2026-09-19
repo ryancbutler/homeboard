@@ -18,11 +18,17 @@ export function ApprovalsTab() {
     setHistorySortBy,
     historySortOrder,
     setHistorySortOrder,
+    historyPage,
+    setHistoryPage,
+    historyPageSize,
+    setHistoryPageSize,
+    historyPageCount,
     perform,
     review,
     undoChore,
     openReschedule,
     filteredHistory,
+    paginatedHistory,
     children,
     pending,
     formatHistorySchedule,
@@ -81,13 +87,13 @@ export function ApprovalsTab() {
                   className="search-input"
                   placeholder="Search by chore name or child…"
                   value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
+                  onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
                 />
 
                 <select
                   aria-label="Filter by child"
                   value={historyChildFilter}
-                  onChange={(e) => setHistoryChildFilter(e.target.value)}
+                  onChange={(e) => { setHistoryChildFilter(e.target.value); setHistoryPage(1); }}
                 >
                   <option value="all">All children</option>
                   {children.map((c) => (
@@ -99,7 +105,7 @@ export function ApprovalsTab() {
                 <select
                   aria-label="Filter by status"
                   value={historyStatusFilter}
-                  onChange={(e) => setHistoryStatusFilter(e.target.value)}
+                  onChange={(e) => { setHistoryStatusFilter(e.target.value); setHistoryPage(1); }}
                 >
                   <option value="all">All statuses</option>
                   <option value="completed">Completed</option>
@@ -112,7 +118,7 @@ export function ApprovalsTab() {
                 <select
                   aria-label="Sort by"
                   value={historySortBy}
-                      onChange={(e) => setHistorySortBy(e.target.value as "date" | "chore" | "child" | "status")}
+                  onChange={(e) => { setHistorySortBy(e.target.value as "date" | "chore" | "child" | "status"); setHistoryPage(1); }}
                 >
                   <option value="date">Sort by Date</option>
                   <option value="chore">Sort by Chore</option>
@@ -124,7 +130,7 @@ export function ApprovalsTab() {
                   type="button"
                   className="history-sort-toggle"
                   title="Toggle ascending / descending"
-                  onClick={() => setHistorySortOrder(historySortOrder === "asc" ? "desc" : "asc")}
+                  onClick={() => { setHistorySortOrder(historySortOrder === "asc" ? "desc" : "asc"); setHistoryPage(1); }}
                 >
                   <ArrowUpDown size={14} aria-hidden="true" />
                   {historySortOrder === "asc" ? "Ascending" : "Descending"}
@@ -144,7 +150,7 @@ export function ApprovalsTab() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredHistory.map((row, index) => {
+                    {paginatedHistory.map((row, index) => {
                       const completedTime = row.completed_at
                         ? new Intl.DateTimeFormat("en-US", {
                             hour: "numeric",
@@ -209,6 +215,19 @@ export function ApprovalsTab() {
                 </table>
                 {filteredHistory.length === 0 && <p className="empty">No matching history entries found.</p>}
               </div>
+              {filteredHistory.length > 0 && (
+                <div className="history-pagination" aria-label="Chore history pagination">
+                  <span>Showing {(historyPage - 1) * historyPageSize + 1}–{Math.min(historyPage * historyPageSize, filteredHistory.length)} of {filteredHistory.length}</span>
+                  <label>Rows per page
+                    <select value={historyPageSize} onChange={(e) => { setHistoryPageSize(Number(e.target.value)); setHistoryPage(1); }}>
+                      <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                    </select>
+                  </label>
+                  <button type="button" className="secondary" disabled={historyPage === 1} onClick={() => setHistoryPage(historyPage - 1)}>Previous</button>
+                  <span>Page {historyPage} of {historyPageCount}</span>
+                  <button type="button" className="secondary" disabled={historyPage === historyPageCount} onClick={() => setHistoryPage(historyPage + 1)}>Next</button>
+                </div>
+              )}
             </section>
           </>);
 }
