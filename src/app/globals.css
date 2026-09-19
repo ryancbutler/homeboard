@@ -811,6 +811,14 @@ button { border: 0; }
   background: #f5effc;
   color: var(--purple-dark);
 }
+.history-pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; color: var(--muted); font-size: .78rem; }
+.history-pagination label { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; }
+.history-pagination select { width: auto; min-height: 36px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+.about-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.about-grid > div { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #fcfaff; }
+.about-grid dt { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.about-grid dd { margin: 5px 0 0; overflow: hidden; color: var(--ink); font-size: .88rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) { .about-grid { grid-template-columns: 1fr; }.history-pagination { justify-content: flex-start; } }
 
 .history-undo-button {
   display: inline-flex;

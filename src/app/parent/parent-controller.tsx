@@ -98,6 +98,8 @@ function useParentController() {
   const [historySearch, setHistorySearch] = useState("");
   const [historySortBy, setHistorySortBy] = useState<"date" | "chore" | "child" | "status">("date");
   const [historySortOrder, setHistorySortOrder] = useState<"asc" | "desc">("desc");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(25);
   const [rescheduleDialog, setRescheduleDialog] = useState<RescheduleDialog | null>(null);
 
   const load = async () => {
@@ -313,6 +315,9 @@ function useParentController() {
       return historySortOrder === "asc" ? cmp : -cmp;
     });
   }, [report?.rows, historyChildFilter, historyStatusFilter, historySearch, historySortBy, historySortOrder]);
+  const historyPageCount = Math.max(1, Math.ceil(filteredHistory.length / historyPageSize));
+  const currentHistoryPage = Math.min(historyPage, historyPageCount);
+  const paginatedHistory = filteredHistory.slice((currentHistoryPage - 1) * historyPageSize, currentHistoryPage * historyPageSize);
 
   const children = members.filter((member) => member.role === "child" && member.active);
   const rotatingGroupIds = new Set(rotations.flatMap((rotation) => [rotation.firstGroup.id, rotation.secondGroup.id]));
@@ -377,6 +382,11 @@ function useParentController() {
     setHistorySortBy,
     historySortOrder,
     setHistorySortOrder,
+    historyPage: currentHistoryPage,
+    setHistoryPage,
+    historyPageSize,
+    setHistoryPageSize,
+    historyPageCount,
     rescheduleDialog,
     setRescheduleDialog,
     perform,
@@ -393,6 +403,7 @@ function useParentController() {
     clearImportFile,
     handleImport,
     filteredHistory,
+    paginatedHistory,
     children,
     rotatingGroupIds,
     childName,

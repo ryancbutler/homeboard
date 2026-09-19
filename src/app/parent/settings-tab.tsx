@@ -1,7 +1,23 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Download, FileJson, FileUp, Home, KeyRound, Upload, X } from "lucide-react";
 import { useParentControllerContext } from "./parent-controller";
+
+type About = {
+  version: string;
+  database: { dialect: string; location: string; poolSize: number | null; bytes: number };
+  chores: { templates: number; activeTemplates: number; managedOccurrences: number; completed: number };
+  routines: number;
+  children: number;
+};
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length);
+  return `${(bytes / 1024 ** power).toFixed(bytes / 1024 ** power >= 10 ? 0 : 1)} ${units[power - 1]}`;
+};
 
 export function SettingsTab() {
   const {
@@ -20,6 +36,18 @@ export function SettingsTab() {
     handleImport,
     children,
   } = useParentControllerContext();
+  const [about, setAbout] = useState<About | null>(null);
+  const [aboutError, setAboutError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/v1/about", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Unable to load about information")))
+      .then((value: About) => { if (active) setAbout(value); })
+      .catch(() => { if (active) setAboutError(true); });
+    return () => { active = false; };
+  }, []);
+
   return (<div className="settings-stack">
             {/* Card 1: Board & Security */}
             <section className="management-card">
@@ -69,6 +97,28 @@ export function SettingsTab() {
                   </button>
                 </form>
               </div>
+            </section>
+
+            <section className="management-card about-card">
+              <p className="eyebrow">ABOUT THIS HOMEBOARD</p>
+              <h2>At a glance</h2>
+              {!about && !aboutError && <p className="form-hint">Loading board details…</p>}
+              {aboutError && <p className="form-hint">Board details are unavailable right now.</p>}
+              {about && <>
+                <dl className="about-grid">
+                  <div><dt>Version</dt><dd>v{about.version}</dd></div>
+                  <div><dt>Database size</dt><dd>{formatBytes(about.database.bytes)}</dd></div>
+                  <div><dt>Database</dt><dd>{about.database.dialect}</dd></div>
+                  <div><dt>Connection</dt><dd title={about.database.location}>{about.database.location}</dd></div>
+                  {about.database.poolSize !== null && <div><dt>Connection pool</dt><dd>{about.database.poolSize} connections</dd></div>}
+                  <div><dt>Active children</dt><dd>{about.children}</dd></div>
+                  <div><dt>Chore templates</dt><dd>{about.chores.activeTemplates} active of {about.chores.templates}</dd></div>
+                  <div><dt>Chores managed</dt><dd>{about.chores.managedOccurrences.toLocaleString()} occurrences</dd></div>
+                  <div><dt>Chores completed</dt><dd>{about.chores.completed.toLocaleString()}</dd></div>
+                  <div><dt>Routine templates</dt><dd>{about.routines}</dd></div>
+                </dl>
+                <p className="form-hint">Database details exclude credentials and other secrets.</p>
+              </>}
             </section>
 
             {/* Card 2: Backup & Restore */}

@@ -15,8 +15,11 @@ export async function GET(request: Request) {
     if (!household) throw new Error("Household not found");
 
     const today = dateInTimezone(new Date(), household.timezone);
-    const from = url.searchParams.get("from") ?? dateInTimezone(new Date(Date.now() - 30 * 86_400_000), household.timezone);
-    const to = url.searchParams.get("to") ?? today;
+    const isCsv = url.searchParams.get("format") === "csv";
+    // The screen shows a recent reporting window; exports are deliberately not
+    // constrained by it so a backup/report always contains the entire history.
+    const from = url.searchParams.get("from") ?? (isCsv ? "0001-01-01" : dateInTimezone(new Date(Date.now() - 30 * 86_400_000), household.timezone));
+    const to = url.searchParams.get("to") ?? (isCsv ? "9999-12-31" : today);
     const rows = await db<{
       obligation_id: string; scheduled_for: string; history_date: string; title: string; child: string | null; status: string; approval_status: string; completed_at: Date | null; rescheduled_for: string | null; is_flexible: boolean; schedule_kind: string; weekdays: number[];
     }[]>`
@@ -76,7 +79,7 @@ export async function GET(request: Request) {
     const pending = rows.filter((row) => row.status === "pending").length;
     const missed = rows.filter((row) => row.status === "missed").length;
 
-    if (url.searchParams.get("format") === "csv") {
+    if (isCsv) {
       const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
       const body = ["history_date,scheduled_for,rescheduled_for,schedule_kind,weekdays,is_flexible,chore,child,status,approval_status,completed_at", ...rows.map((row) => [row.history_date, row.scheduled_for, row.rescheduled_for, row.schedule_kind, row.weekdays.join(" "), row.is_flexible, row.title, row.child, row.status, row.approval_status, row.completed_at?.toISOString()].map(escape).join(","))].join("\n");
       return new Response(body, { headers: { "Content-Type": "text/csv", "Content-Disposition": "attachment; filename=homeboard-report.csv" } });
