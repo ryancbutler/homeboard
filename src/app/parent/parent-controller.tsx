@@ -25,6 +25,7 @@ type ReportRow = {
 
 type RescheduleDay = { date: string; label: string; available: boolean; reason: string | null };
 type RescheduleDialog = {
+  kind: "reschedule" | "postpone";
   obligationId: string;
   title: string;
   child: string | null;
@@ -52,9 +53,12 @@ type NavTab = "approvals" | "chores" | "routines" | "groups" | "family" | "setti
 
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const formatScheduledDate = (date: string | null) => date
-  ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`))
-  : "No upcoming instance";
+const formatScheduledDate = (date: string | null) =>
+  date
+    ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(
+        new Date(`${date}T12:00:00.000Z`)
+      )
+    : "No upcoming instance";
 
 const formatHistorySchedule = (row: ReportRow) => {
   if (row.rescheduled_for) return `Rescheduled to ${formatScheduledDate(row.rescheduled_for)}`;
@@ -66,8 +70,13 @@ const formatHistorySchedule = (row: ReportRow) => {
 };
 
 const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(path, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
-  if (!response.ok) throw new Error((await response.json().catch(() => ({ error: "Unable to connect. Please try again." }))).error);
+  const response = await fetch(path, {
+    ...init,
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+  if (!response.ok)
+    throw new Error((await response.json().catch(() => ({ error: "Unable to connect. Please try again." }))).error);
   return response.json();
 };
 
@@ -103,15 +112,16 @@ function useParentController() {
   const [rescheduleDialog, setRescheduleDialog] = useState<RescheduleDialog | null>(null);
 
   const load = async () => {
-    const [nextMembers, nextReport, nextGroups, nextRotations, nextChores, nextRoutines, nextDashboard] = await Promise.all([
-      request<Member[]>("/api/v1/members"),
-      request<Report>("/api/v1/reports"),
-      request<ChoreGroup[]>("/api/v1/chore-groups"),
-      request<ChoreGroupRotation[]>("/api/v1/chore-group-rotations"),
-      request<ChoreTemplate[]>("/api/v1/chore-templates"),
-      request<RoutineTemplate[]>("/api/v1/routine-templates"),
-      request<DashboardData>("/api/v1/dashboard"),
-    ]);
+    const [nextMembers, nextReport, nextGroups, nextRotations, nextChores, nextRoutines, nextDashboard] =
+      await Promise.all([
+        request<Member[]>("/api/v1/members"),
+        request<Report>("/api/v1/reports"),
+        request<ChoreGroup[]>("/api/v1/chore-groups"),
+        request<ChoreGroupRotation[]>("/api/v1/chore-group-rotations"),
+        request<ChoreTemplate[]>("/api/v1/chore-templates"),
+        request<RoutineTemplate[]>("/api/v1/routine-templates"),
+        request<DashboardData>("/api/v1/dashboard"),
+      ]);
     setMembers(nextMembers);
     setReport(nextReport);
     setGroups(nextGroups);
@@ -124,9 +134,14 @@ function useParentController() {
   const perform = async (key: string, action: () => Promise<void>) => {
     if (busy) return;
     setBusy(key);
-    try { await action(); await load(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Couldn't save that. Please try again."); }
-    finally { setBusy(null); }
+    try {
+      await action();
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Couldn't save that. Please try again.");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const chores = useChoreManagement({
@@ -134,14 +149,14 @@ function useParentController() {
     request,
     setNotice,
     timezone: dashboard?.household.timezone ?? "America/Chicago",
-    selectChores: () => setActiveTab("chores")
+    selectChores: () => setActiveTab("chores"),
   });
   const routines = useRoutineManagement({
     perform,
     request,
     setNotice,
     timezone: dashboard?.household.timezone ?? "America/Chicago",
-    selectRoutines: () => setActiveTab("routines")
+    selectRoutines: () => setActiveTab("routines"),
   });
   const groupManagement = useGroupManagement({ perform, request, setNotice });
 
@@ -166,8 +181,12 @@ function useParentController() {
     const element = event.currentTarget;
     const form = new FormData(element);
     void perform("child", async () => {
-      await request("/api/v1/members", { method: "POST", body: JSON.stringify({ displayName: form.get("name"), color: form.get("color") }) });
-      element.reset(); setNotice("Child profile added. Welcome to the team!");
+      await request("/api/v1/members", {
+        method: "POST",
+        body: JSON.stringify({ displayName: form.get("name"), color: form.get("color") }),
+      });
+      element.reset();
+      setNotice("Child profile added. Welcome to the team!");
     });
   };
 
@@ -179,10 +198,13 @@ function useParentController() {
     });
   };
 
-  const review = (id: string, decision: "approve" | "reject") => void perform(id, async () => {
-    await request(`/api/v1/obligations/${id}/review`, { method: "POST", body: JSON.stringify({ decision }) });
-    setNotice(decision === "approve" ? "Chore approved. Another win for the team!" : "Chore sent back for another try.");
-  });
+  const review = (id: string, decision: "approve" | "reject") =>
+    void perform(id, async () => {
+      await request(`/api/v1/obligations/${id}/review`, { method: "POST", body: JSON.stringify({ decision }) });
+      setNotice(
+        decision === "approve" ? "Chore approved. Another win for the team!" : "Chore sent back for another try."
+      );
+    });
 
   // Undo chore completion per child in history
   const undoChore = (obligationId: string, choreTitle: string) => {
@@ -193,23 +215,49 @@ function useParentController() {
   };
 
   const openReschedule = (row: ReportRow) => {
-    setRescheduleDialog({ obligationId: row.obligation_id, title: row.title, child: row.child, days: null, selectedDate: null });
+    setRescheduleDialog({
+      kind: "reschedule",
+      obligationId: row.obligation_id,
+      title: row.title,
+      child: row.child,
+      days: null,
+      selectedDate: null,
+    });
     void perform(`reschedule-options-${row.obligation_id}`, async () => {
       const options = await request<{ days: RescheduleDay[] }>(`/api/v1/obligations/${row.obligation_id}/reschedule`);
-      setRescheduleDialog((current) => current?.obligationId === row.obligation_id ? { ...current, days: options.days } : current);
+      setRescheduleDialog((current) =>
+        current?.obligationId === row.obligation_id ? { ...current, days: options.days } : current
+      );
+    });
+  };
+
+  const openPostpone = (row: ReportRow) => {
+    setRescheduleDialog({
+      kind: "postpone",
+      obligationId: row.obligation_id,
+      title: row.title,
+      child: row.child,
+      days: null,
+      selectedDate: null,
+    });
+    void perform(`postpone-options-${row.obligation_id}`, async () => {
+      const options = await request<{ days: RescheduleDay[] }>(`/api/v1/obligations/${row.obligation_id}/postpone`);
+      setRescheduleDialog((current) =>
+        current?.obligationId === row.obligation_id ? { ...current, days: options.days } : current
+      );
     });
   };
 
   const confirmReschedule = () => {
     if (!rescheduleDialog?.selectedDate) return;
-    const { obligationId, selectedDate, title } = rescheduleDialog;
-    void perform(`reschedule-${obligationId}`, async () => {
-      await request(`/api/v1/obligations/${obligationId}/reschedule`, {
+    const { kind, obligationId, selectedDate, title } = rescheduleDialog;
+    void perform(`${kind}-${obligationId}`, async () => {
+      await request(`/api/v1/obligations/${obligationId}/${kind}`, {
         method: "POST",
-        body: JSON.stringify({ scheduledFor: selectedDate })
+        body: JSON.stringify({ scheduledFor: selectedDate }),
       });
       setRescheduleDialog(null);
-      setNotice(`Chore "${title}" rescheduled for ${selectedDate}.`);
+      setNotice(`Chore "${title}" ${kind === "postpone" ? "postponed" : "rescheduled"} for ${selectedDate}.`);
     });
   };
 
@@ -222,8 +270,8 @@ function useParentController() {
         body: JSON.stringify({
           name: form.get("householdName"),
           subheading: form.get("subheading"),
-          showBanner: form.get("showBanner") === "on"
-        })
+          showBanner: form.get("showBanner") === "on",
+        }),
       });
       setNotice("Board settings updated!");
     });
@@ -237,7 +285,7 @@ function useParentController() {
     void perform("change-pin", async () => {
       await request("/api/v1/auth/pin", {
         method: "PATCH",
-        body: JSON.stringify({ newPin })
+        body: JSON.stringify({ newPin }),
       });
       element.reset();
       setNotice("Parent PIN changed successfully!");
@@ -262,7 +310,12 @@ function useParentController() {
       setNotice("Backup files must be smaller than 1 MB.");
       return;
     }
-    if (!window.confirm("Import this setup? It adds missing children, groups, chores, and routines. Existing chores and routines with the same name will be left unchanged.")) return;
+    if (
+      !window.confirm(
+        "Import this setup? It adds missing children, groups, chores, and routines. Existing chores and routines with the same name will be left unchanged."
+      )
+    )
+      return;
     void perform("import", async () => {
       const text = await importFile.text();
       const json = JSON.parse(text);
@@ -276,10 +329,12 @@ function useParentController() {
         skippedRoutines: number;
       }>("/api/v1/backup", {
         method: "POST",
-        body: JSON.stringify(json)
+        body: JSON.stringify(json),
       });
       const skipped = res.skippedChores + res.skippedRoutines;
-      setNotice(`Import complete: added ${res.importedChildren ? `${res.importedChildren} children, ` : ""}${res.importedChores} chores, ${res.importedRoutines} routines, and ${res.importedGroups} groups.${skipped ? ` Left ${skipped} matching chore or routine${skipped === 1 ? "" : "s"} unchanged.` : ""}`);
+      setNotice(
+        `Import complete: added ${res.importedChildren ? `${res.importedChildren} children, ` : ""}${res.importedChores} chores, ${res.importedRoutines} routines, and ${res.importedGroups} groups.${skipped ? ` Left ${skipped} matching chore or routine${skipped === 1 ? "" : "s"} unchanged.` : ""}`
+      );
       clearImportFile();
       (event.target as HTMLFormElement).reset();
     });
@@ -288,36 +343,41 @@ function useParentController() {
   // Filtered & sorted history entries
   const filteredHistory = useMemo(() => {
     if (!report?.rows) return [];
-    return report.rows.filter((row) => {
-      if (historyChildFilter !== "all") {
-        const rowChild = row.child ?? "Shared";
-        if (rowChild !== historyChildFilter) return false;
-      }
-      if (historyStatusFilter !== "all" && row.status !== historyStatusFilter) return false;
-      if (historySearch.trim()) {
-        const q = historySearch.toLowerCase();
-        const matchesTitle = row.title.toLowerCase().includes(q);
-        const matchesChild = (row.child ?? "").toLowerCase().includes(q);
-        if (!matchesTitle && !matchesChild) return false;
-      }
-      return true;
-    }).sort((a, b) => {
-      let cmp = 0;
-      if (historySortBy === "date") {
-        cmp = a.history_date.localeCompare(b.history_date);
-      } else if (historySortBy === "chore") {
-        cmp = a.title.localeCompare(b.title);
-      } else if (historySortBy === "child") {
-        cmp = (a.child ?? "").localeCompare(b.child ?? "");
-      } else if (historySortBy === "status") {
-        cmp = a.status.localeCompare(b.status);
-      }
-      return historySortOrder === "asc" ? cmp : -cmp;
-    });
+    return report.rows
+      .filter((row) => {
+        if (historyChildFilter !== "all") {
+          const rowChild = row.child ?? "Shared";
+          if (rowChild !== historyChildFilter) return false;
+        }
+        if (historyStatusFilter !== "all" && row.status !== historyStatusFilter) return false;
+        if (historySearch.trim()) {
+          const q = historySearch.toLowerCase();
+          const matchesTitle = row.title.toLowerCase().includes(q);
+          const matchesChild = (row.child ?? "").toLowerCase().includes(q);
+          if (!matchesTitle && !matchesChild) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        let cmp = 0;
+        if (historySortBy === "date") {
+          cmp = a.history_date.localeCompare(b.history_date);
+        } else if (historySortBy === "chore") {
+          cmp = a.title.localeCompare(b.title);
+        } else if (historySortBy === "child") {
+          cmp = (a.child ?? "").localeCompare(b.child ?? "");
+        } else if (historySortBy === "status") {
+          cmp = a.status.localeCompare(b.status);
+        }
+        return historySortOrder === "asc" ? cmp : -cmp;
+      });
   }, [report?.rows, historyChildFilter, historyStatusFilter, historySearch, historySortBy, historySortOrder]);
   const historyPageCount = Math.max(1, Math.ceil(filteredHistory.length / historyPageSize));
   const currentHistoryPage = Math.min(historyPage, historyPageCount);
-  const paginatedHistory = filteredHistory.slice((currentHistoryPage - 1) * historyPageSize, currentHistoryPage * historyPageSize);
+  const paginatedHistory = filteredHistory.slice(
+    (currentHistoryPage - 1) * historyPageSize,
+    currentHistoryPage * historyPageSize
+  );
 
   const children = members.filter((member) => member.role === "child" && member.active);
   const rotatingGroupIds = new Set(rotations.flatMap((rotation) => [rotation.firstGroup.id, rotation.secondGroup.id]));
@@ -342,10 +402,10 @@ function useParentController() {
           finishedChores: chores.filter((chore) => isFinished(chore.status)).length,
           openChores: chores.filter((chore) => isStillOpen(chore.status)).length,
           totalRoutineSteps,
-          completedRoutineSteps
+          completedRoutineSteps,
         };
       }),
-      sharedOpenChores: dashboard.chores.filter((chore) => !chore.assignee && isStillOpen(chore.status)).length
+      sharedOpenChores: dashboard.chores.filter((chore) => !chore.assignee && isStillOpen(chore.status)).length,
     };
   }, [dashboard]);
 
@@ -357,6 +417,7 @@ function useParentController() {
     activeTab,
     setActiveTab,
     members,
+    report,
     groups,
     rotations,
     ...groupManagement,
@@ -396,6 +457,7 @@ function useParentController() {
     review,
     undoChore,
     openReschedule,
+    openPostpone,
     confirmReschedule,
     updateHouseholdSettings,
     changePin,
