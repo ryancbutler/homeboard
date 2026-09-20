@@ -18,7 +18,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions and the pull-
 
 ## License
 
-Homeboard is available under the [MIT License](LICENSE).
+Homeboard is available under the [MIT License](LICENSE), copyright © 2026 Ryan Butler.
 
 ## Architecture
 
@@ -241,7 +241,3 @@ src/components/      Client components
 src/lib/             Database, authentication, scheduling, and domain logic
 src/worker.ts        Recurrence and overdue-status worker
 ```
-
-## License
-
-Private household project. All rights reserved.
