@@ -3,10 +3,10 @@
   "version": "1.0.1",
   "private": true,
   "type": "module",
-  "packageManager": "npm@12.0.2",
+  "packageManager": "npm@12.1.0",
   "engines": {
     "node": "24.21.x",
-    "npm": "12.0.x"
+    "npm": "12.1.x"
   },
   "scripts": {
     "dev": "next dev",
