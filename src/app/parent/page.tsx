@@ -22,6 +22,7 @@ import { RoutinesTab } from "./routines-tab";
 import { GroupsTab } from "./groups-tab";
 import { FamilyTab } from "./family-tab";
 import { SettingsTab } from "./settings-tab";
+import { useInactivityLogout } from "./use-inactivity-logout";
 
 export default function ParentPage() {
   return (
@@ -55,6 +56,8 @@ function ParentContent() {
     familyToday,
   } = useParentControllerContext();
   const rescheduleModalRef = useRef<HTMLDialogElement>(null);
+
+  useInactivityLogout(authenticated);
 
   useEffect(() => {
     const dialog = rescheduleModalRef.current;
