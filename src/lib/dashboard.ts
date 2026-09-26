@@ -10,9 +10,19 @@ export type DashboardData = {
   };
   children: { id: string; name: string; color: string; avatarUrl: string | null }[];
   chores: {
-    obligationId: string; occurrenceId: string; title: string; instructions: string | null; icon: string | null; scheduledFor: string;
-    dueAt: string | null; policy: "individual" | "any" | "every"; isFlexible: boolean; scheduleKind: string; weekdays: number[];
-    status: string; approvalStatus: string;
+    obligationId: string;
+    occurrenceId: string;
+    title: string;
+    instructions: string | null;
+    icon: string | null;
+    scheduledFor: string;
+    dueAt: string | null;
+    policy: "individual" | "any" | "every";
+    isFlexible: boolean;
+    scheduleKind: string;
+    weekdays: number[];
+    status: string;
+    approvalStatus: string;
     assignee: { id: string; name: string; color: string } | null;
     allowedChildren: { id: string; name: string; color: string }[];
     completedBy: string | null;
@@ -32,13 +42,31 @@ export type DashboardData = {
   generatedAt: string;
 };
 
+type ChoreChild = DashboardData["chores"][number]["allowedChildren"][number];
+
+/**
+ * Only shared chores are eligible to appear in more than one child's column.
+ * A grouped individual chore without a group assignee is deliberately
+ * unassigned; treating it as shared makes it leak into every child's list.
+ */
+export function allowedChildrenForChore(
+  policy: DashboardData["chores"][number]["policy"],
+  explicitlyAllowed: ChoreChild[] | undefined,
+  children: ChoreChild[]
+): ChoreChild[] {
+  if (policy !== "any") return [];
+  return explicitlyAllowed ?? children;
+}
+
 export async function dashboardFor(householdId: string): Promise<DashboardData> {
-  const householdRows = await db<{
-    name: string;
-    subheading: string;
-    timezone: string;
-    show_banner: boolean;
-  }[]>`
+  const householdRows = await db<
+    {
+      name: string;
+      subheading: string;
+      timezone: string;
+      show_banner: boolean;
+    }[]
+  >`
     SELECT name,
            COALESCE(subheading, 'Your people. Your little wins. Your home, together.') AS subheading,
            timezone,
@@ -52,12 +80,29 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
     db<{ id: string; display_name: string; color: string; avatar_url: string | null }[]>`
       SELECT id, display_name, color, avatar_url FROM members
       WHERE household_id = ${householdId} AND role = 'child' AND active = true ORDER BY display_name`,
-    db<{
-      obligation_id: string; occurrence_id: string; title: string; instructions: string | null; scheduled_for: string; due_at: Date | null;
-      assignment_policy: "individual" | "any" | "every"; is_flexible: boolean; schedule_kind: string; weekdays: number[];
-      status: string; approval_status: string; assignee_id: string | null;
-      assignee_name: string | null; assignee_color: string | null; completed_by: string | null; completed_at: Date | null; template_id: string; icon: string | null;
-    }[]>`
+    db<
+      {
+        obligation_id: string;
+        occurrence_id: string;
+        title: string;
+        instructions: string | null;
+        scheduled_for: string;
+        due_at: Date | null;
+        assignment_policy: "individual" | "any" | "every";
+        is_flexible: boolean;
+        schedule_kind: string;
+        weekdays: number[];
+        status: string;
+        approval_status: string;
+        assignee_id: string | null;
+        assignee_name: string | null;
+        assignee_color: string | null;
+        completed_by: string | null;
+        completed_at: Date | null;
+        template_id: string;
+        icon: string | null;
+      }[]
+    >`
       SELECT o.id AS obligation_id, co.id AS occurrence_id, ct.id AS template_id, ct.title, ct.instructions, ct.icon, co.scheduled_for,
         co.due_at, ct.assignment_policy, ct.is_flexible, ct.schedule_kind, COALESCE(ct.weekdays, '{}') AS weekdays,
         o.status, o.approval_status, o.member_id AS assignee_id,
@@ -79,7 +124,20 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
           )
         )
       ORDER BY (CASE WHEN o.status = 'completed' THEN 1 ELSE 0 END), co.scheduled_for, co.due_at NULLS LAST, ct.title`,
-    db<{ run_id: string; title: string; icon: string | null; owner: string | null; owner_id: string | null; owner_color: string | null; step_id: string; step_title: string; step_icon: string | null; completed: boolean }[]>`
+    db<
+      {
+        run_id: string;
+        title: string;
+        icon: string | null;
+        owner: string | null;
+        owner_id: string | null;
+        owner_color: string | null;
+        step_id: string;
+        step_title: string;
+        step_icon: string | null;
+        completed: boolean;
+      }[]
+    >`
       SELECT rr.id AS run_id, rt.title, rt.icon, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title, rs.icon AS step_icon,
         (rsc.id IS NOT NULL) AS completed
       FROM routine_runs rr
@@ -92,10 +150,12 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
           rr.member_id IS NOT NULL
           OR NOT EXISTS (SELECT 1 FROM routine_template_assignees rta WHERE rta.routine_template_id = rt.id)
         )
-      ORDER BY rt.title, rs.position`
+      ORDER BY rt.title, rs.position`,
   ]);
   const allowedByTemplate = new Map<string, { id: string; name: string; color: string }[]>();
-  const templateIds = [...new Set(choreRows.filter((row) => row.assignment_policy === "any").map((row) => row.template_id))];
+  const templateIds = [
+    ...new Set(choreRows.filter((row) => row.assignment_policy === "any").map((row) => row.template_id)),
+  ];
   if (templateIds.length) {
     const allowed = await db<{ chore_template_id: string; id: string; display_name: string; color: string }[]>`
       SELECT cta.chore_template_id, m.id, m.display_name, m.color
@@ -118,7 +178,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       ownerColor: row.owner_color,
       completedSteps: 0,
       totalSteps: 0,
-      steps: []
+      steps: [],
     };
     value.totalSteps += 1;
     if (row.completed) value.completedSteps += 1;
@@ -130,21 +190,38 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       name: household.name,
       subheading: household.subheading,
       timezone: household.timezone,
-      showBanner: household.show_banner
+      showBanner: household.show_banner,
     },
-    children: children.map((child) => ({ id: child.id, name: child.display_name, color: child.color, avatarUrl: child.avatar_url })),
+    children: children.map((child) => ({
+      id: child.id,
+      name: child.display_name,
+      color: child.color,
+      avatarUrl: child.avatar_url,
+    })),
     chores: choreRows.map((row) => ({
-      obligationId: row.obligation_id, occurrenceId: row.occurrence_id, title: row.title, instructions: row.instructions,
+      obligationId: row.obligation_id,
+      occurrenceId: row.occurrence_id,
+      title: row.title,
+      instructions: row.instructions,
       icon: row.icon ?? null,
-      scheduledFor: row.scheduled_for, dueAt: row.due_at?.toISOString() ?? null, policy: row.assignment_policy,
-      isFlexible: row.is_flexible, scheduleKind: row.schedule_kind, weekdays: row.weekdays ?? [],
-      status: row.status, approvalStatus: row.approval_status,
+      scheduledFor: row.scheduled_for,
+      dueAt: row.due_at?.toISOString() ?? null,
+      policy: row.assignment_policy,
+      isFlexible: row.is_flexible,
+      scheduleKind: row.schedule_kind,
+      weekdays: row.weekdays ?? [],
+      status: row.status,
+      approvalStatus: row.approval_status,
       assignee: row.assignee_id ? { id: row.assignee_id, name: row.assignee_name!, color: row.assignee_color! } : null,
-      allowedChildren: allowedByTemplate.get(row.template_id) ?? children.map((child) => ({ id: child.id, name: child.display_name, color: child.color })),
+      allowedChildren: allowedChildrenForChore(
+        row.assignment_policy,
+        allowedByTemplate.get(row.template_id),
+        children.map((child) => ({ id: child.id, name: child.display_name, color: child.color }))
+      ),
       completedBy: row.completed_by,
-      completedAt: row.completed_at?.toISOString() ?? null
+      completedAt: row.completed_at?.toISOString() ?? null,
     })),
     routines: [...routines.values()],
-    generatedAt: new Date().toISOString()
+    generatedAt: new Date().toISOString(),
   };
 }
