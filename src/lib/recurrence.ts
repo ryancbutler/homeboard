@@ -50,7 +50,7 @@ export async function materializeChores(until = new Date(Date.now() + 30 * 86_40
         SELECT ${template.id}, ${template.household_id}, ${day}, ${dueAt(day, template.due_time, timezone)}
         WHERE NOT EXISTS (
           SELECT 1 FROM chore_occurrences
-          WHERE chore_template_id = ${template.id} AND (scheduled_for = ${day} OR postponed_from = ${day})
+          WHERE chore_template_id = ${template.id} AND postponed_from = ${day}
         )
         ON CONFLICT (chore_template_id, scheduled_for) DO UPDATE SET scheduled_for = EXCLUDED.scheduled_for
         RETURNING id`;
