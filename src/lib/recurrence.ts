@@ -63,6 +63,16 @@ export async function materializeChores(until = new Date(Date.now() + 30 * 86_40
           VALUES (${occurrenceId}, ${assignee.member_id}, 'not_required')
           ON CONFLICT DO NOTHING`;
       } else {
+        // Existing open obligations can outlive an assignment or rotation change.
+        // Reconcile them on every materialization so the board always reflects the
+        // child who owns this group for the occurrence's week. Completed work is
+        // intentionally preserved with the child who completed it.
+        if (rotatingAssignee) {
+          await db`
+            UPDATE chore_obligations
+            SET member_id = ${rotatingAssignee}
+            WHERE occurrence_id = ${occurrenceId} AND status = 'open'`;
+        }
         await db`
           INSERT INTO chore_obligations (occurrence_id, member_id, approval_status)
           SELECT ${occurrenceId}, ${rotatingAssignee ?? (template.assignment_policy === "individual" ? (assignees[0]?.member_id ?? null) : null)}, 'not_required'
