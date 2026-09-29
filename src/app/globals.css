@@ -3445,6 +3445,44 @@ input[type="file"]::file-selector-button:hover {
   display: flex;
   flex-direction: column;
   gap: 9px;
+  padding: 12px;
+  border: 1px solid #ddd0e7;
+  border-left: 4px solid #8a6bad;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #faf7fc 0%, #f5eff9 100%);
+}
+.routine-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.task-kind-label,
+.routine-step-count {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.task-kind-label {
+  padding: 4px 7px;
+}
+.task-kind-label.routine {
+  color: #533d6c;
+  background: #e8ddf0;
+}
+.task-kind-label.chore {
+  color: #725330;
+  background: #f5ead9;
+  margin-bottom: 4px;
+}
+.routine-step-count {
+  padding: 4px 0;
+  color: #715b87;
 }
 .section-subtitle {
   font:
@@ -3458,6 +3496,7 @@ input[type="file"]::file-selector-button:hover {
   display: flex;
   align-items: center;
   gap: 7px;
+  margin: -2px 0 0;
 }
 .routine-title-icon {
   width: 26px;
@@ -3473,6 +3512,13 @@ input[type="file"]::file-selector-button:hover {
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+.child-task-card.routine-step-card {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: #e7ddee;
+}
+.child-task-card.routine-step-card:hover {
+  background: #ffffff;
 }
 .child-task-card {
   display: flex;
