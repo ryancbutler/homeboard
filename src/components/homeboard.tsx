@@ -689,7 +689,17 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                       <h3 className="section-subtitle day-part-title">{label}</h3>
                       {sectionTasks.map((task) =>
                         task.type === "routine" ? (
-                          <div className="ordered-routine" key={`routine-${task.item.id}`}>
+                          <section
+                            className="ordered-routine"
+                            key={`routine-${task.item.id}`}
+                            aria-label={`Routine: ${task.item.title}`}
+                          >
+                            <div className="routine-heading">
+                              <span className="task-kind-label routine">Routine</span>
+                              <span className="routine-step-count">
+                                {task.item.steps.length} step{task.item.steps.length === 1 ? "" : "s"}
+                              </span>
+                            </div>
                             <h4 className="section-subtitle routine-title">
                               <span className="routine-title-icon" aria-hidden="true">
                                 {getTaskIcon(task.item.title, task.item.icon)}
@@ -698,7 +708,10 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                             </h4>
                             <div className="task-cards-stack">
                               {task.item.steps.map((step) => (
-                                <div key={step.id} className={`child-task-card ${step.completed ? "task-done" : ""}`}>
+                                <div
+                                  key={step.id}
+                                  className={`child-task-card routine-step-card ${step.completed ? "task-done" : ""}`}
+                                >
                                   <span
                                     className={`task-icon-badge ${step.completed ? "done" : ""}`}
                                     aria-hidden="true"
@@ -726,7 +739,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                                 </div>
                               ))}
                             </div>
-                          </div>
+                          </section>
                         ) : (
                           <div
                             key={task.item.obligationId}
@@ -736,6 +749,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                               {getTaskIcon(task.item.title, task.item.icon)}
                             </span>
                             <div className="task-card-content">
+                              <span className="task-kind-label chore">Chore</span>
                               <span className="task-title-text">{task.item.title}</span>
                               {task.item.instructions && <p className="task-subtext">{task.item.instructions}</p>}
                               <div className="task-badges-row">
