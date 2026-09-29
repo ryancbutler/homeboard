@@ -16,12 +16,17 @@ for (const [index, filename] of postgresMigrations.entries()) {
   if (match[1] !== expectedNumber) throw new Error(`Expected migration ${expectedNumber}, found ${filename}.`);
 }
 
-const sqliteSnapshot = "db/migrations/sqlite/001_initial.sql";
-const snapshot = readFileSync(sqliteSnapshot, "utf8");
-const alignedThrough = snapshot.match(/^-- PostgreSQL migration baseline: (\d{3})$/m)?.[1];
+const sqliteDirectory = "db/migrations/sqlite";
+const sqliteMigrations = readdirSync(sqliteDirectory)
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
+const latestSqliteMigration = `${sqliteDirectory}/${sqliteMigrations.at(-1)}`;
+const alignedThrough = readFileSync(latestSqliteMigration, "utf8").match(
+  /^-- PostgreSQL migration baseline: (\d{3})$/m
+)?.[1];
 const latestMigration = postgresMigrations.at(-1).slice(0, 3);
 if (alignedThrough !== latestMigration) {
-  throw new Error(`${sqliteSnapshot} must declare -- PostgreSQL migration baseline: ${latestMigration}.`);
+  throw new Error(`${latestSqliteMigration} must declare -- PostgreSQL migration baseline: ${latestMigration}.`);
 }
 
 if (process.argv.includes("--staged")) {
@@ -32,11 +37,11 @@ if (process.argv.includes("--staged")) {
   )
     .split("\n")
     .some((file) => file.startsWith("db/migrations/") && !file.startsWith("db/migrations/sqlite/"));
-  const stagedSnapshot =
-    execFileSync("git", ["diff", "--cached", "--name-only", "--", sqliteSnapshot], { encoding: "utf8" }).trim().length >
-    0;
+  const stagedSqliteMigration =
+    execFileSync("git", ["diff", "--cached", "--name-only", "--", sqliteDirectory], { encoding: "utf8" }).trim()
+      .length > 0;
 
-  if (addedPostgresMigration && !stagedSnapshot) {
-    throw new Error(`A new PostgreSQL migration requires an updated ${sqliteSnapshot} schema snapshot.`);
+  if (addedPostgresMigration && !stagedSqliteMigration) {
+    throw new Error("A new PostgreSQL migration requires a matching SQLite migration.");
   }
 }

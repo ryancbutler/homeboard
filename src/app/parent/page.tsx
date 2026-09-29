@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import {
   ArrowLeft,
+  ArrowDownUp,
   CheckCheck,
   Clock3,
   Home,
@@ -19,6 +20,7 @@ import { ParentControllerProvider, useParentControllerContext } from "./parent-c
 import { ApprovalsTab } from "./approvals-tab";
 import { ChoresTab } from "./chores-tab";
 import { RoutinesTab } from "./routines-tab";
+import { DailyOrderTab } from "./daily-order-tab";
 import { GroupsTab } from "./groups-tab";
 import { FamilyTab } from "./family-tab";
 import { SettingsTab } from "./settings-tab";
@@ -273,6 +275,16 @@ function ParentContent() {
             <li>
               <button
                 type="button"
+                className={`sidebar-nav-item ${activeTab === "daily-order" ? "active" : ""}`}
+                onClick={() => setActiveTab("daily-order")}
+              >
+                <ArrowDownUp size={18} aria-hidden="true" />
+                <span>Daily order</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
                 className={`sidebar-nav-item ${activeTab === "groups" ? "active" : ""}`}
                 onClick={() => setActiveTab("groups")}
               >
@@ -314,6 +326,8 @@ function ParentContent() {
 
           {/* TAB 3: Routines Management */}
           {activeTab === "routines" && <RoutinesTab />}
+
+          {activeTab === "daily-order" && <DailyOrderTab />}
 
           {/* TAB 4: Chore Groups */}
           {activeTab === "groups" && <GroupsTab />}

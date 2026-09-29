@@ -49,7 +49,7 @@ type Report = {
   rows: ReportRow[];
 };
 
-type NavTab = "approvals" | "chores" | "routines" | "groups" | "family" | "settings";
+type NavTab = "approvals" | "chores" | "routines" | "daily-order" | "groups" | "family" | "settings";
 
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -425,7 +425,9 @@ function useParentController() {
     routineTemplates,
     dashboard,
     notice,
+    setNotice,
     busy,
+    request,
     ...chores,
     ...routines,
     importFile,
