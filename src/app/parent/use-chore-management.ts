@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { formSchedule, matchingIcons } from "./parent-utils";
+import type { DayPart } from "@/lib/day-order";
 
 export type ChoreTemplate = {
   id: string;
@@ -17,6 +18,8 @@ export type ChoreTemplate = {
   active: boolean;
   groupId: string | null;
   assigneeIds: string[];
+  dayPart: DayPart | null;
+  displayOrder: number | null;
 };
 
 type Options = {
@@ -33,6 +36,7 @@ export function useChoreManagement({ perform, request, setNotice, timezone, sele
   const [choreIcon, setChoreIcon] = useState("");
   const [choreIconFilter, setChoreIconFilter] = useState("");
   const [choreScheduleKind, setChoreScheduleKind] = useState("daily");
+  const [choreDayPart, setChoreDayPart] = useState<DayPart | null>(null);
   const [choreWeekdays, setChoreWeekdays] = useState<number[]>([1]);
   const [choreIsFlexible, setChoreIsFlexible] = useState(false);
   const [choreSelectedGroupId, setChoreSelectedGroupId] = useState("");
@@ -47,6 +51,7 @@ export function useChoreManagement({ perform, request, setNotice, timezone, sele
     setChoreIcon(chore.icon ?? "");
     setChoreIconFilter("");
     setChoreScheduleKind(chore.scheduleKind);
+    setChoreDayPart(chore.dayPart);
     setChoreWeekdays(chore.weekdays.length ? chore.weekdays : [1]);
     setChoreIsFlexible(chore.isFlexible);
     setChoreSelectedGroupId(chore.groupId ?? "");
@@ -63,6 +68,7 @@ export function useChoreManagement({ perform, request, setNotice, timezone, sele
     setChoreIcon("");
     setChoreIconFilter("");
     setChoreScheduleKind("daily");
+    setChoreDayPart(null);
     setChoreWeekdays([1]);
     setChoreIsFlexible(false);
     setChoreSelectedGroupId("");
@@ -93,7 +99,8 @@ export function useChoreManagement({ perform, request, setNotice, timezone, sele
         isFlexible: choreScheduleKind === "weekly" ? choreIsFlexible : false,
         assigneeIds: choreAssigneeIds,
         groupId,
-        schedule: formSchedule(choreScheduleKind, choreWeekdays, timezone)
+        dayPart: choreDayPart,
+        schedule: formSchedule(choreScheduleKind, choreWeekdays, timezone),
       };
       if (editingChore) {
         await request(`/api/v1/chore-templates/${editingChore.id}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -116,9 +123,33 @@ export function useChoreManagement({ perform, request, setNotice, timezone, sele
   };
 
   return {
-    editingChore, choreTitleInput, setChoreTitleInput, choreIcon, setChoreIcon, choreIconFilter, setChoreIconFilter,
-    choreScheduleKind, setChoreScheduleKind, choreWeekdays, setChoreWeekdays, choreIsFlexible, setChoreIsFlexible,
-    choreSelectedGroupId, setChoreSelectedGroupId, choreAssigneeIds, setChoreAssigneeIds, chorePolicy, setChorePolicy,
-    choreApprovalRequired, setChoreApprovalRequired, filteredChoreIcons, startEditChore, cancelEditChore, saveChore, deleteChore
+    editingChore,
+    choreTitleInput,
+    setChoreTitleInput,
+    choreIcon,
+    setChoreIcon,
+    choreIconFilter,
+    setChoreIconFilter,
+    choreScheduleKind,
+    setChoreScheduleKind,
+    choreWeekdays,
+    setChoreWeekdays,
+    choreIsFlexible,
+    setChoreIsFlexible,
+    choreDayPart,
+    setChoreDayPart,
+    choreSelectedGroupId,
+    setChoreSelectedGroupId,
+    choreAssigneeIds,
+    setChoreAssigneeIds,
+    chorePolicy,
+    setChorePolicy,
+    choreApprovalRequired,
+    setChoreApprovalRequired,
+    filteredChoreIcons,
+    startEditChore,
+    cancelEditChore,
+    saveChore,
+    deleteChore,
   };
 }

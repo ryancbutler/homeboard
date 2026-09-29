@@ -6,18 +6,26 @@ import { apiError } from "@/lib/http";
 import { materializeRoutines } from "@/lib/recurrence";
 import { dateInTimezone } from "@/lib/dates";
 import { scheduleSchema } from "@/lib/schedule-validation";
+import { dayPartSchema, nextDisplayOrder } from "@/lib/day-order";
+import { databaseIdSchema } from "@/lib/id-validation";
 
 const routineStepSchema = z.union([
-  z.string().trim().min(1).max(120).transform((title) => ({ title, icon: null })),
-  z.object({ title: z.string().trim().min(1).max(120), icon: z.string().trim().max(50).nullable().optional() })
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .transform((title) => ({ title, icon: null })),
+  z.object({ title: z.string().trim().min(1).max(120), icon: z.string().trim().max(50).nullable().optional() }),
 ]);
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   icon: z.string().trim().max(50).nullable().optional(),
-  assigneeIds: z.array(z.string().uuid()).optional(),
+  dayPart: dayPartSchema.nullable().optional(),
+  assigneeIds: z.array(databaseIdSchema).optional(),
   schedule: scheduleSchema.optional(),
-  steps: z.array(routineStepSchema).min(1).max(20).optional()
+  steps: z.array(routineStepSchema).min(1).max(20).optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -26,17 +34,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const input = updateSchema.parse(await request.json());
 
-    const [household] = await db<{ timezone: string }[]>`SELECT timezone FROM households WHERE id = ${context.householdId}`;
+    const [household] = await db<
+      { timezone: string }[]
+    >`SELECT timezone FROM households WHERE id = ${context.householdId}`;
     const today = dateInTimezone(new Date(), household.timezone);
 
     await db.begin(async (tx) => {
-      const [existing] = await tx<{ id: string }[]>`
-        SELECT id FROM routine_templates
+      const [existing] = await tx<{ id: string; day_part: "morning" | "afternoon" | "evening" | null }[]>`
+        SELECT id, day_part FROM routine_templates
         WHERE id = ${id} AND household_id = ${context.householdId} AND active = true`;
       if (!existing) throw new Error("Routine not found");
 
-      if (input.title !== undefined || input.icon !== undefined || input.schedule || input.assigneeIds) {
-        const policy = (input.assigneeIds && input.assigneeIds.length > 0) ? "every" : "any";
+      if (
+        input.title !== undefined ||
+        input.icon !== undefined ||
+        input.schedule ||
+        input.assigneeIds ||
+        input.dayPart !== undefined
+      ) {
+        const policy = input.assigneeIds && input.assigneeIds.length > 0 ? "every" : "any";
+        const changedPart = input.dayPart !== undefined && input.dayPart !== existing.day_part;
+        const order =
+          changedPart && input.dayPart ? await nextDisplayOrder(tx, context.householdId, input.dayPart) : null;
         await tx`
           UPDATE routine_templates
           SET title = COALESCE(${input.title ?? null}, title),
@@ -45,7 +64,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               start_date = COALESCE(${input.schedule?.startDate ?? null}, start_date),
               due_time = ${input.schedule ? (input.schedule.dueTime ?? null) : db`due_time`},
               weekdays = COALESCE(${input.schedule?.weekdays ?? null}, weekdays),
-              assignment_policy = ${input.assigneeIds ? policy : db`assignment_policy`}
+              assignment_policy = ${input.assigneeIds ? policy : db`assignment_policy`},
+              day_part = ${input.dayPart === undefined ? db`day_part` : input.dayPart},
+              display_order = ${changedPart ? order : db`display_order`}
           WHERE id = ${id}`;
       }
 
@@ -71,7 +92,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     await materializeRoutines();
     return NextResponse.json({ success: true, id });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -79,7 +102,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const context = await requireContext(true);
     const { id } = await params;
 
-    const [household] = await db<{ timezone: string }[]>`SELECT timezone FROM households WHERE id = ${context.householdId}`;
+    const [household] = await db<
+      { timezone: string }[]
+    >`SELECT timezone FROM households WHERE id = ${context.householdId}`;
     const today = dateInTimezone(new Date(), household.timezone);
 
     await db.begin(async (tx) => {
@@ -100,5 +125,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     });
 
     return NextResponse.json({ success: true, id });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }

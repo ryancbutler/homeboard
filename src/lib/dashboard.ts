@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { dateInTimezone, sundayOfWeek } from "@/lib/dates";
+import type { DayPart } from "@/lib/day-order";
 
 export type DashboardData = {
   household: {
@@ -27,6 +28,9 @@ export type DashboardData = {
     allowedChildren: { id: string; name: string; color: string }[];
     completedBy: string | null;
     completedAt: string | null;
+    templateId: string;
+    dayPart: DayPart | null;
+    displayOrder: number | null;
   }[];
   routines: {
     id: string;
@@ -38,6 +42,9 @@ export type DashboardData = {
     completedSteps: number;
     totalSteps: number;
     steps: { id: string; title: string; icon: string | null; completed: boolean }[];
+    templateId: string;
+    dayPart: DayPart | null;
+    displayOrder: number | null;
   }[];
   generatedAt: string;
 };
@@ -101,9 +108,11 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         completed_at: Date | null;
         template_id: string;
         icon: string | null;
+        day_part: DayPart | null;
+        display_order: number | null;
       }[]
     >`
-      SELECT o.id AS obligation_id, co.id AS occurrence_id, ct.id AS template_id, ct.title, ct.instructions, ct.icon, co.scheduled_for,
+      SELECT o.id AS obligation_id, co.id AS occurrence_id, ct.id AS template_id, ct.title, ct.instructions, ct.icon, ct.day_part, ct.display_order, co.scheduled_for,
         co.due_at, ct.assignment_policy, ct.is_flexible, ct.schedule_kind, COALESCE(ct.weekdays, '{}') AS weekdays,
         o.status, o.approval_status, o.member_id AS assignee_id,
         m.display_name AS assignee_name, m.color AS assignee_color, o.completed_by, o.completed_at
@@ -136,9 +145,12 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         step_title: string;
         step_icon: string | null;
         completed: boolean;
+        template_id: string;
+        day_part: DayPart | null;
+        display_order: number | null;
       }[]
     >`
-      SELECT rr.id AS run_id, rt.title, rt.icon, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title, rs.icon AS step_icon,
+      SELECT rr.id AS run_id, rt.id AS template_id, rt.title, rt.icon, rt.day_part, rt.display_order, m.display_name AS owner, m.id AS owner_id, m.color AS owner_color, rs.id AS step_id, rs.title AS step_title, rs.icon AS step_icon,
         (rsc.id IS NOT NULL) AS completed
       FROM routine_runs rr
       JOIN routine_templates rt ON rt.id = rr.routine_template_id
@@ -179,6 +191,9 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       completedSteps: 0,
       totalSteps: 0,
       steps: [],
+      templateId: row.template_id,
+      dayPart: row.day_part,
+      displayOrder: row.display_order,
     };
     value.totalSteps += 1;
     if (row.completed) value.completedSteps += 1;
@@ -220,6 +235,9 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       ),
       completedBy: row.completed_by,
       completedAt: row.completed_at?.toISOString() ?? null,
+      templateId: row.template_id,
+      dayPart: row.day_part,
+      displayOrder: row.display_order,
     })),
     routines: [...routines.values()],
     generatedAt: new Date().toISOString(),

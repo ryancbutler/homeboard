@@ -7,6 +7,8 @@ import { materializeChores } from "@/lib/recurrence";
 import { normalizeChoreAssignmentPolicy, resolveChoreAssignees } from "@/lib/chore-assignment";
 import { scheduleSchema } from "@/lib/schedule-validation";
 import { dateInTimezone } from "@/lib/dates";
+import { dayPartSchema, nextDisplayOrder } from "@/lib/day-order";
+import { databaseIdSchema } from "@/lib/id-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +19,10 @@ const updateSchema = z.object({
   assignmentPolicy: z.enum(["individual", "any", "every"]).optional(),
   approvalRequired: z.boolean().optional(),
   isFlexible: z.boolean().optional(),
+  dayPart: dayPartSchema.nullable().optional(),
   schedule: scheduleSchema.optional(),
-  assigneeIds: z.array(z.string().uuid()).optional(),
-  groupId: z.string().uuid().optional().nullable()
+  assigneeIds: z.array(databaseIdSchema).optional(),
+  groupId: databaseIdSchema.optional().nullable(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -28,16 +31,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const input = updateSchema.parse(await request.json());
 
-    const [household] = await db<{ timezone: string }[]>`SELECT timezone FROM households WHERE id = ${context.householdId}`;
+    const [household] = await db<
+      { timezone: string }[]
+    >`SELECT timezone FROM households WHERE id = ${context.householdId}`;
     const today = dateInTimezone(new Date(), household.timezone);
 
     await db.begin(async (tx) => {
-      const [existing] = await tx<{
-        id: string;
-        assignment_policy: "individual" | "any" | "every";
-        chore_group_id: string | null;
-      }[]>`
-        SELECT id, assignment_policy, chore_group_id
+      const [existing] = await tx<
+        {
+          id: string;
+          assignment_policy: "individual" | "any" | "every";
+          chore_group_id: string | null;
+          day_part: "morning" | "afternoon" | "evening" | null;
+        }[]
+      >`
+        SELECT id, assignment_policy, chore_group_id, day_part
         FROM chore_templates
         WHERE id = ${id} AND household_id = ${context.householdId} AND active = true`;
       if (!existing) throw new Error("Chore not found");
@@ -70,6 +78,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         due_time?: string | null;
         weekdays?: number[];
         chore_group_id?: string | null;
+        day_part?: "morning" | "afternoon" | "evening" | null;
+        display_order?: number | null;
         updated_at: Date;
       } = { updated_at: new Date() };
 
@@ -80,6 +90,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (input.approvalRequired !== undefined) updates.approval_required = input.approvalRequired;
       if (input.isFlexible !== undefined) updates.is_flexible = input.isFlexible;
       if (input.groupId !== undefined) updates.chore_group_id = input.groupId ?? null;
+      if (input.dayPart !== undefined && input.dayPart !== existing.day_part) {
+        updates.day_part = input.dayPart;
+        updates.display_order = input.dayPart ? await nextDisplayOrder(tx, context.householdId, input.dayPart) : null;
+      }
       if (input.schedule !== undefined) {
         updates.schedule_kind = input.schedule.kind;
         updates.start_date = input.schedule.startDate;
@@ -100,7 +114,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           const valid = await tx<{ count: string }[]>`
             SELECT count(*) FROM members
             WHERE household_id = ${context.householdId} AND role = 'child' AND active AND id = ANY(${assigneeIds})`;
-          if (Number(valid[0].count) !== assigneeIds.length) throw new Error("Assignees must be active children in this household");
+          if (Number(valid[0].count) !== assigneeIds.length)
+            throw new Error("Assignees must be active children in this household");
         }
 
         await tx`DELETE FROM chore_template_assignees WHERE chore_template_id = ${id}`;
@@ -118,7 +133,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     await materializeChores();
     return NextResponse.json({ success: true, id });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -126,7 +143,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const context = await requireContext(true);
     const { id } = await params;
 
-    const [household] = await db<{ timezone: string }[]>`SELECT timezone FROM households WHERE id = ${context.householdId}`;
+    const [household] = await db<
+      { timezone: string }[]
+    >`SELECT timezone FROM households WHERE id = ${context.householdId}`;
     const today = dateInTimezone(new Date(), household.timezone);
 
     await db.begin(async (tx) => {
@@ -161,5 +180,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     });
 
     return NextResponse.json({ success: true, id });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }

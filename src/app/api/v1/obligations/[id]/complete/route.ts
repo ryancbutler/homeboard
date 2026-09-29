@@ -3,8 +3,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireContext } from "@/lib/auth";
 import { apiError, idempotencyKey } from "@/lib/http";
+import { databaseIdSchema } from "@/lib/id-validation";
 
-const bodySchema = z.object({ actorId: z.string().uuid() });
+const bodySchema = z.object({ actorId: databaseIdSchema });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,10 +14,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const key = idempotencyKey(request);
     const result = await db.begin(async (tx) => {
-      const rows = await tx<{
-        household_id: string; status: string; member_id: string | null; assignment_policy: "individual" | "any" | "every";
-        approval_required: boolean; template_id: string;
-      }[]>`
+      const rows = await tx<
+        {
+          household_id: string;
+          status: string;
+          member_id: string | null;
+          assignment_policy: "individual" | "any" | "every";
+          approval_required: boolean;
+          template_id: string;
+        }[]
+      >`
         SELECT co.household_id, o.status, o.member_id, ct.assignment_policy, ct.approval_required, ct.id AS template_id
         FROM chore_obligations o JOIN chore_occurrences co ON co.id = o.occurrence_id
         JOIN chore_templates ct ON ct.id = co.chore_template_id WHERE o.id = ${id} FOR UPDATE`;
@@ -26,7 +33,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const actors = await tx<{ role: "parent" | "child" }[]>`
         SELECT role FROM members WHERE id = ${actorId} AND household_id = ${context.householdId} AND active = true`;
       if (!actors[0]) throw new Error("Forbidden");
-      if (obligation.member_id && obligation.member_id !== actorId && context.role !== "parent") throw new Error("Forbidden");
+      if (obligation.member_id && obligation.member_id !== actorId && context.role !== "parent")
+        throw new Error("Forbidden");
       if (!obligation.member_id && obligation.assignment_policy === "any") {
         const allowed = await tx<{ exists: boolean }[]>`
           SELECT EXISTS(SELECT 1 FROM chore_template_assignees WHERE chore_template_id = ${obligation.template_id} AND member_id = ${actorId}) AS exists`;
@@ -43,5 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return update[0];
     });
     return NextResponse.json(result);
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }

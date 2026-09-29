@@ -6,53 +6,87 @@ import { apiError } from "@/lib/http";
 import { dateInTimezone } from "@/lib/dates";
 import { resolveChoreAssignees } from "@/lib/chore-assignment";
 import { materializeChores, materializeRoutines } from "@/lib/recurrence";
+import { dayPartSchema } from "@/lib/day-order";
 
 export const dynamic = "force-dynamic";
 
 const routineStepSchema = z.union([
-  z.string().trim().min(1).transform((title) => ({ title, icon: null })),
-  z.object({ title: z.string().trim().min(1), icon: z.string().trim().max(50).nullable().optional() })
+  z
+    .string()
+    .trim()
+    .min(1)
+    .transform((title) => ({ title, icon: null })),
+  z.object({ title: z.string().trim().min(1), icon: z.string().trim().max(50).nullable().optional() }),
 ]);
 
 const importSchema = z.object({
   version: z.number().optional(),
-  children: z.array(z.object({
-    name: z.string().trim().min(1).max(80),
-    color: z.string().trim().optional()
-  })).max(50).default([]),
-  groups: z.array(z.object({
-    name: z.string().trim().min(1).max(120),
-    assignedChild: z.string().nullable().optional()
-  })).max(50).default([]),
-  rotations: z.array(z.object({
-    firstGroup: z.string().trim().min(1).max(120),
-    secondGroup: z.string().trim().min(1).max(120),
-    firstChild: z.string().trim().min(1).max(80),
-    secondChild: z.string().trim().min(1).max(80),
-    startDate: z.string().date()
-  })).max(25).default([]),
-  chores: z.array(z.object({
-    title: z.string().trim().min(1).max(120),
-    instructions: z.string().nullable().optional(),
-    icon: z.string().trim().max(50).nullable().optional(),
-    assignmentPolicy: z.enum(["individual", "any", "every"]).optional(),
-    approvalRequired: z.boolean().default(false),
-    isFlexible: z.boolean().default(false),
-    scheduleKind: z.enum(["once", "daily", "weekdays", "weekly"]).default("daily"),
-    dueTime: z.string().nullable().optional(),
-    weekdays: z.array(z.number().int().min(0).max(6)).default([]),
-    groupName: z.string().nullable().optional(),
-    assignedChildren: z.array(z.string()).default([])
-  })).max(500).default([]),
-  routines: z.array(z.object({
-    title: z.string().trim().min(1).max(120),
-    icon: z.string().trim().max(50).nullable().optional(),
-    scheduleKind: z.enum(["once", "daily", "weekdays", "weekly"]).default("daily"),
-    dueTime: z.string().nullable().optional(),
-    weekdays: z.array(z.number().int().min(0).max(6)).default([]),
-    steps: z.array(routineStepSchema).default([]),
-    assignedChildren: z.array(z.string()).default([])
-  })).max(500).default([])
+  children: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        color: z.string().trim().optional(),
+      })
+    )
+    .max(50)
+    .default([]),
+  groups: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(120),
+        assignedChild: z.string().nullable().optional(),
+      })
+    )
+    .max(50)
+    .default([]),
+  rotations: z
+    .array(
+      z.object({
+        firstGroup: z.string().trim().min(1).max(120),
+        secondGroup: z.string().trim().min(1).max(120),
+        firstChild: z.string().trim().min(1).max(80),
+        secondChild: z.string().trim().min(1).max(80),
+        startDate: z.string().date(),
+      })
+    )
+    .max(25)
+    .default([]),
+  chores: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+        instructions: z.string().nullable().optional(),
+        icon: z.string().trim().max(50).nullable().optional(),
+        assignmentPolicy: z.enum(["individual", "any", "every"]).optional(),
+        approvalRequired: z.boolean().default(false),
+        isFlexible: z.boolean().default(false),
+        scheduleKind: z.enum(["once", "daily", "weekdays", "weekly"]).default("daily"),
+        dueTime: z.string().nullable().optional(),
+        weekdays: z.array(z.number().int().min(0).max(6)).default([]),
+        groupName: z.string().nullable().optional(),
+        assignedChildren: z.array(z.string()).default([]),
+        dayPart: dayPartSchema.nullable().optional(),
+        displayOrder: z.number().int().positive().nullable().optional(),
+      })
+    )
+    .max(500)
+    .default([]),
+  routines: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+        icon: z.string().trim().max(50).nullable().optional(),
+        scheduleKind: z.enum(["once", "daily", "weekdays", "weekly"]).default("daily"),
+        dueTime: z.string().nullable().optional(),
+        weekdays: z.array(z.number().int().min(0).max(6)).default([]),
+        steps: z.array(routineStepSchema).default([]),
+        assignedChildren: z.array(z.string()).default([]),
+        dayPart: dayPartSchema.nullable().optional(),
+        displayOrder: z.number().int().positive().nullable().optional(),
+      })
+    )
+    .max(500)
+    .default([]),
 });
 
 export async function GET() {
@@ -67,26 +101,55 @@ export async function GET() {
       db<{ id: string; name: string; assigned_member_id: string | null }[]>`
         SELECT id, name, assigned_member_id FROM chore_groups
         WHERE household_id = ${context.householdId}`,
-      db<{ first_group_id: string; second_group_id: string; first_member_id: string; second_member_id: string; start_date: string }[]>`
+      db<
+        {
+          first_group_id: string;
+          second_group_id: string;
+          first_member_id: string;
+          second_member_id: string;
+          start_date: string;
+        }[]
+      >`
         SELECT first_group_id, second_group_id, first_member_id, second_member_id, start_date
         FROM chore_group_rotations WHERE household_id = ${context.householdId}`,
-      db<{
-        id: string; title: string; instructions: string | null; icon: string | null; assignment_policy: string;
-        approval_required: boolean; is_flexible: boolean; schedule_kind: string; due_time: string | null;
-        weekdays: number[]; chore_group_id: string | null;
-      }[]>`
+      db<
+        {
+          id: string;
+          title: string;
+          instructions: string | null;
+          icon: string | null;
+          assignment_policy: string;
+          approval_required: boolean;
+          is_flexible: boolean;
+          schedule_kind: string;
+          due_time: string | null;
+          weekdays: number[];
+          chore_group_id: string | null;
+          day_part: "morning" | "afternoon" | "evening" | null;
+          display_order: number | null;
+        }[]
+      >`
         SELECT ct.id, ct.title, ct.instructions, ct.icon, ct.assignment_policy, ct.approval_required, ct.is_flexible,
-               ct.schedule_kind, ct.due_time, COALESCE(ct.weekdays, '{}') AS weekdays, ct.chore_group_id
+               ct.schedule_kind, ct.due_time, COALESCE(ct.weekdays, '{}') AS weekdays, ct.chore_group_id, ct.day_part, ct.display_order
         FROM chore_templates ct
         WHERE ct.household_id = ${context.householdId} AND ct.active = true
         ORDER BY ct.created_at`,
-      db<{
-        id: string; title: string; icon: string | null; schedule_kind: string; due_time: string | null; weekdays: number[];
-      }[]>`
-        SELECT rt.id, rt.title, rt.icon, rt.schedule_kind, rt.due_time, COALESCE(rt.weekdays, '{}') AS weekdays
+      db<
+        {
+          id: string;
+          title: string;
+          icon: string | null;
+          schedule_kind: string;
+          due_time: string | null;
+          weekdays: number[];
+          day_part: "morning" | "afternoon" | "evening" | null;
+          display_order: number | null;
+        }[]
+      >`
+        SELECT rt.id, rt.title, rt.icon, rt.schedule_kind, rt.due_time, COALESCE(rt.weekdays, '{}') AS weekdays, rt.day_part, rt.display_order
         FROM routine_templates rt
         WHERE rt.household_id = ${context.householdId} AND rt.active = true
-        ORDER BY rt.created_at`
+        ORDER BY rt.created_at`,
     ]);
 
     const memberMap = new Map(members.map((m) => [m.id, m.display_name]));
@@ -110,7 +173,7 @@ export async function GET() {
         ? db<{ routine_template_id: string; member_id: string }[]>`
             SELECT routine_template_id, member_id FROM routine_template_assignees
             WHERE routine_template_id = ANY(${routineIds})`
-        : []
+        : [],
     ]);
 
     const choreAssigneesMap = new Map<string, string[]>();
@@ -141,15 +204,15 @@ export async function GET() {
     }
 
     const backup = {
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
       children: members.map((m) => ({
         name: m.display_name,
-        color: m.color
+        color: m.color,
       })),
       groups: groups.map((g) => ({
         name: g.name,
-        assignedChild: g.assigned_member_id ? memberMap.get(g.assigned_member_id) ?? null : null
+        assignedChild: g.assigned_member_id ? (memberMap.get(g.assigned_member_id) ?? null) : null,
       })),
       rotations: rotations.flatMap((rotation) => {
         const firstGroup = groupMap.get(rotation.first_group_id);
@@ -170,8 +233,10 @@ export async function GET() {
         scheduleKind: c.schedule_kind,
         dueTime: c.due_time,
         weekdays: c.weekdays,
-        groupName: c.chore_group_id ? groupMap.get(c.chore_group_id) ?? null : null,
-        assignedChildren: choreAssigneesMap.get(c.id) ?? []
+        groupName: c.chore_group_id ? (groupMap.get(c.chore_group_id) ?? null) : null,
+        assignedChildren: choreAssigneesMap.get(c.id) ?? [],
+        dayPart: c.day_part,
+        displayOrder: c.display_order,
       })),
       routines: routineTemplates.map((r) => ({
         title: r.title,
@@ -180,17 +245,21 @@ export async function GET() {
         dueTime: r.due_time,
         weekdays: r.weekdays,
         steps: routineStepsMap.get(r.id) ?? [],
-        assignedChildren: routineAssigneesMap.get(r.id) ?? []
-      }))
+        assignedChildren: routineAssigneesMap.get(r.id) ?? [],
+        dayPart: r.day_part,
+        displayOrder: r.display_order,
+      })),
     };
 
     return NextResponse.json(backup, {
       headers: {
         "Content-Disposition": `attachment; filename="homeboard-setup-${new Date().toISOString().slice(0, 10)}.json"`,
-        "Cache-Control": "no-store"
-      }
+        "Cache-Control": "no-store",
+      },
     });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -201,7 +270,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const data = importSchema.parse(body);
 
-    const [household] = await db<{ timezone: string }[]>`SELECT timezone FROM households WHERE id = ${context.householdId}`;
+    const [household] = await db<
+      { timezone: string }[]
+    >`SELECT timezone FROM households WHERE id = ${context.householdId}`;
     const today = dateInTimezone(new Date(), household.timezone);
 
     const existingMembers = await db<{ id: string; display_name: string }[]>`
@@ -236,7 +307,7 @@ export async function POST(request: Request) {
       const groupLookup = new Map<string, string>();
       for (const groupInput of data.groups) {
         const assignedId = groupInput.assignedChild
-          ? memberLookup.get(groupInput.assignedChild.trim().toLowerCase()) ?? null
+          ? (memberLookup.get(groupInput.assignedChild.trim().toLowerCase()) ?? null)
           : null;
 
         const [existing] = await tx<{ id: string }[]>`
@@ -263,7 +334,15 @@ export async function POST(request: Request) {
         const secondGroupId = groupLookup.get(rotationInput.secondGroup.trim().toLowerCase());
         const firstMemberId = memberLookup.get(rotationInput.firstChild.trim().toLowerCase());
         const secondMemberId = memberLookup.get(rotationInput.secondChild.trim().toLowerCase());
-        if (!firstGroupId || !secondGroupId || !firstMemberId || !secondMemberId || firstGroupId === secondGroupId || firstMemberId === secondMemberId) continue;
+        if (
+          !firstGroupId ||
+          !secondGroupId ||
+          !firstMemberId ||
+          !secondMemberId ||
+          firstGroupId === secondGroupId ||
+          firstMemberId === secondMemberId
+        )
+          continue;
         await tx`
           INSERT INTO chore_group_rotations (household_id, first_group_id, second_group_id, first_member_id, second_member_id, start_date)
           SELECT ${context.householdId}, ${firstGroupId}, ${secondGroupId}, ${firstMemberId}, ${secondMemberId}, ${rotationInput.startDate}
@@ -286,7 +365,7 @@ export async function POST(request: Request) {
           continue;
         }
         const groupId = choreInput.groupName
-          ? groupLookup.get(choreInput.groupName.trim().toLowerCase()) ?? null
+          ? (groupLookup.get(choreInput.groupName.trim().toLowerCase()) ?? null)
           : null;
 
         const assigneeIds: string[] = [];
@@ -302,7 +381,9 @@ export async function POST(request: Request) {
           groupAssigneeId = group?.assigned_member_id ?? null;
         }
 
-        let policy = choreInput.assignmentPolicy ?? (assigneeIds.length > 1 ? "every" : assigneeIds.length === 1 ? "individual" : "any");
+        let policy =
+          choreInput.assignmentPolicy ??
+          (assigneeIds.length > 1 ? "every" : assigneeIds.length === 1 ? "individual" : "any");
         if (groupId) policy = "individual";
 
         const finalAssignees = resolveChoreAssignees(policy, assigneeIds, groupAssigneeId);
@@ -310,12 +391,12 @@ export async function POST(request: Request) {
         const [choreTemplate] = await tx<{ id: string }[]>`
           INSERT INTO chore_templates (
             household_id, title, instructions, icon, assignment_policy, approval_required, is_flexible,
-            schedule_kind, start_date, due_time, weekdays, chore_group_id
+            schedule_kind, start_date, due_time, weekdays, chore_group_id, day_part, display_order
           ) VALUES (
             ${context.householdId}, ${choreInput.title}, ${choreInput.instructions ?? null}, ${choreInput.icon ?? null},
             ${policy}, ${choreInput.approvalRequired}, ${choreInput.isFlexible},
             ${choreInput.scheduleKind}, ${today}, ${choreInput.dueTime ?? null},
-            ${choreInput.weekdays}, ${groupId}
+            ${choreInput.weekdays}, ${groupId}, ${choreInput.dayPart ?? null}, ${choreInput.displayOrder ?? null}
           ) RETURNING id`;
 
         for (const mId of finalAssignees) {
@@ -344,8 +425,8 @@ export async function POST(request: Request) {
         const policy = assigneeIds.length > 0 ? "every" : "any";
 
         const [routineTemplate] = await tx<{ id: string }[]>`
-          INSERT INTO routine_templates (household_id, title, icon, assignment_policy, schedule_kind, start_date, due_time, weekdays)
-          VALUES (${context.householdId}, ${routineInput.title}, ${routineInput.icon ?? null}, ${policy}, ${routineInput.scheduleKind}, ${today}, ${routineInput.dueTime ?? null}, ${routineInput.weekdays})
+          INSERT INTO routine_templates (household_id, title, icon, assignment_policy, schedule_kind, start_date, due_time, weekdays, day_part, display_order)
+          VALUES (${context.householdId}, ${routineInput.title}, ${routineInput.icon ?? null}, ${policy}, ${routineInput.scheduleKind}, ${today}, ${routineInput.dueTime ?? null}, ${routineInput.weekdays}, ${routineInput.dayPart ?? null}, ${routineInput.displayOrder ?? null})
           RETURNING id`;
 
         for (const mId of assigneeIds) {
@@ -370,7 +451,9 @@ export async function POST(request: Request) {
       importedChores,
       importedRoutines,
       skippedChores,
-      skippedRoutines
+      skippedRoutines,
     });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }

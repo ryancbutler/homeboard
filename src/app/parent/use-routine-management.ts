@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { formSchedule, matchingIcons } from "./parent-utils";
+import type { DayPart } from "@/lib/day-order";
 
 export type RoutineTemplate = {
   id: string;
@@ -12,6 +13,8 @@ export type RoutineTemplate = {
   weekdays: number[];
   steps: { id: string; position: number; title: string; icon: string | null }[];
   assignees: { id: string; name: string }[];
+  dayPart: DayPart | null;
+  displayOrder: number | null;
 };
 
 type RoutineStepDraft = { title: string; icon: string };
@@ -26,23 +29,33 @@ type Options = {
 export function useRoutineManagement({ perform, request, setNotice, timezone, selectRoutines }: Options) {
   const [editingRoutine, setEditingRoutine] = useState<RoutineTemplate | null>(null);
   const [routineScheduleKind, setRoutineScheduleKind] = useState("daily");
+  const [routineDayPart, setRoutineDayPart] = useState<DayPart | null>(null);
   const [routineWeekdays, setRoutineWeekdays] = useState<number[]>([1]);
   const [routineTitleInput, setRoutineTitleInput] = useState("");
   const [routineIcon, setRoutineIcon] = useState("");
   const [routineIconFilter, setRoutineIconFilter] = useState("");
   const [routineAssigneeIds, setRoutineAssigneeIds] = useState<string[]>([]);
-  const [routineSteps, setRoutineSteps] = useState<RoutineStepDraft[]>([{ title: "", icon: "" }, { title: "", icon: "" }, { title: "", icon: "" }]);
+  const [routineSteps, setRoutineSteps] = useState<RoutineStepDraft[]>([
+    { title: "", icon: "" },
+    { title: "", icon: "" },
+    { title: "", icon: "" },
+  ]);
   const filteredRoutineIcons = useMemo(() => matchingIcons(routineIconFilter), [routineIconFilter]);
 
   const startEditRoutine = (routine: RoutineTemplate) => {
     setEditingRoutine(routine);
     setRoutineTitleInput(routine.title);
     setRoutineScheduleKind(routine.scheduleKind);
+    setRoutineDayPart(routine.dayPart);
     setRoutineWeekdays(routine.weekdays.length ? routine.weekdays : [1]);
     setRoutineIcon(routine.icon ?? "");
     setRoutineIconFilter("");
     setRoutineAssigneeIds(routine.assignees.map((assignee) => assignee.id));
-    setRoutineSteps(routine.steps.length ? routine.steps.map((step) => ({ title: step.title, icon: step.icon ?? "" })) : [{ title: "", icon: "" }]);
+    setRoutineSteps(
+      routine.steps.length
+        ? routine.steps.map((step) => ({ title: step.title, icon: step.icon ?? "" }))
+        : [{ title: "", icon: "" }]
+    );
     selectRoutines();
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -51,11 +64,16 @@ export function useRoutineManagement({ perform, request, setNotice, timezone, se
     setEditingRoutine(null);
     setRoutineTitleInput("");
     setRoutineScheduleKind("daily");
+    setRoutineDayPart(null);
     setRoutineWeekdays([1]);
     setRoutineIcon("");
     setRoutineIconFilter("");
     setRoutineAssigneeIds([]);
-    setRoutineSteps([{ title: "", icon: "" }, { title: "", icon: "" }, { title: "", icon: "" }]);
+    setRoutineSteps([
+      { title: "", icon: "" },
+      { title: "", icon: "" },
+      { title: "", icon: "" },
+    ]);
   };
 
   const saveRoutine = (event: FormEvent<HTMLFormElement>) => {
@@ -76,10 +94,14 @@ export function useRoutineManagement({ perform, request, setNotice, timezone, se
         icon: routineIcon || null,
         assigneeIds: routineAssigneeIds,
         steps,
-        schedule: formSchedule(routineScheduleKind, routineWeekdays, timezone)
+        dayPart: routineDayPart,
+        schedule: formSchedule(routineScheduleKind, routineWeekdays, timezone),
       };
       if (editingRoutine) {
-        await request(`/api/v1/routine-templates/${editingRoutine.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+        await request(`/api/v1/routine-templates/${editingRoutine.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
         setNotice(`Routine "${title}" updated.`);
       } else {
         await request("/api/v1/routine-templates", { method: "POST", body: JSON.stringify(payload) });
@@ -99,9 +121,27 @@ export function useRoutineManagement({ perform, request, setNotice, timezone, se
   };
 
   return {
-    editingRoutine, routineScheduleKind, setRoutineScheduleKind, routineWeekdays, setRoutineWeekdays, routineTitleInput,
-    setRoutineTitleInput, routineIcon, setRoutineIcon, routineIconFilter, setRoutineIconFilter, routineAssigneeIds,
-    setRoutineAssigneeIds, routineSteps, setRoutineSteps, filteredRoutineIcons, startEditRoutine, cancelEditRoutine,
-    saveRoutine, deleteRoutine
+    editingRoutine,
+    routineScheduleKind,
+    setRoutineScheduleKind,
+    routineWeekdays,
+    setRoutineWeekdays,
+    routineTitleInput,
+    routineDayPart,
+    setRoutineDayPart,
+    setRoutineTitleInput,
+    routineIcon,
+    setRoutineIcon,
+    routineIconFilter,
+    setRoutineIconFilter,
+    routineAssigneeIds,
+    setRoutineAssigneeIds,
+    routineSteps,
+    setRoutineSteps,
+    filteredRoutineIcons,
+    startEditRoutine,
+    cancelEditRoutine,
+    saveRoutine,
+    deleteRoutine,
   };
 }
