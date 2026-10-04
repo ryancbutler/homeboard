@@ -1,12 +1,11 @@
 ARG NODE_VERSION=24.21.0
 
 FROM node:${NODE_VERSION}-alpine AS base
-RUN npm install --global npm@12.0.2 && npm --version
 
 FROM base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json* .npmrc ./
-RUN npm ci
+RUN npm install --global "$(node -p "require('./package.json').packageManager")" && npm ci
 
 FROM base AS build
 WORKDIR /app
@@ -20,7 +19,9 @@ RUN npm run build:tools
 FROM base AS production-dependencies
 WORKDIR /app
 COPY package.json package-lock.json* .npmrc ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm install --global "$(node -p "require('./package.json').packageManager")" \
+  && npm ci --omit=dev --ignore-scripts \
+  && npm cache clean --force
 
 FROM base AS runtime-web
 WORKDIR /app
