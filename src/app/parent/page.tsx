@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import {
   ArrowLeft,
   ArrowDownUp,
+  BarChart3,
   CheckCheck,
   Clock3,
   Home,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { ParentControllerProvider, useParentControllerContext } from "./parent-controller";
 import { ApprovalsTab } from "./approvals-tab";
+import { ReportsTab } from "./reports-tab";
 import { ChoresTab } from "./chores-tab";
 import { RoutinesTab } from "./routines-tab";
 import { DailyOrderTab } from "./daily-order-tab";
@@ -253,6 +255,16 @@ function ParentContent() {
             <li>
               <button
                 type="button"
+                className={`sidebar-nav-item ${activeTab === "reports" ? "active" : ""}`}
+                onClick={() => setActiveTab("reports")}
+              >
+                <BarChart3 size={18} aria-hidden="true" />
+                <span>Weekly review</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
                 className={`sidebar-nav-item ${activeTab === "chores" ? "active" : ""}`}
                 onClick={() => setActiveTab("chores")}
               >
@@ -320,6 +332,8 @@ function ParentContent() {
         <div className="parent-content-area">
           {/* TAB 1: Approvals & History */}
           {activeTab === "approvals" && <ApprovalsTab />}
+
+          {activeTab === "reports" && <ReportsTab />}
 
           {/* TAB 2: Chores Management */}
           {activeTab === "chores" && <ChoresTab />}

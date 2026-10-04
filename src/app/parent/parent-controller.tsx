@@ -49,7 +49,7 @@ type Report = {
   rows: ReportRow[];
 };
 
-type NavTab = "approvals" | "chores" | "routines" | "daily-order" | "groups" | "family" | "settings";
+type NavTab = "approvals" | "reports" | "chores" | "routines" | "daily-order" | "groups" | "family" | "settings";
 
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 

@@ -3,8 +3,11 @@ import { db } from "@/lib/db";
 import { requireContext } from "@/lib/auth";
 import { dateInTimezone } from "@/lib/dates";
 import { apiError } from "@/lib/http";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const dateParameter = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 
 export async function GET(request: Request) {
   try {
@@ -18,11 +21,31 @@ export async function GET(request: Request) {
     const isCsv = url.searchParams.get("format") === "csv";
     // The screen shows a recent reporting window; exports are deliberately not
     // constrained by it so a backup/report always contains the entire history.
-    const from = url.searchParams.get("from") ?? (isCsv ? "0001-01-01" : dateInTimezone(new Date(Date.now() - 30 * 86_400_000), household.timezone));
-    const to = url.searchParams.get("to") ?? (isCsv ? "9999-12-31" : today);
-    const rows = await db<{
-      obligation_id: string; scheduled_for: string; history_date: string; title: string; child: string | null; status: string; approval_status: string; completed_at: Date | null; rescheduled_for: string | null; is_flexible: boolean; schedule_kind: string; weekdays: number[];
-    }[]>`
+    const requestedFrom = url.searchParams.get("from") ?? undefined;
+    const requestedTo = url.searchParams.get("to") ?? undefined;
+    if (requestedFrom) dateParameter.parse(requestedFrom);
+    if (requestedTo) dateParameter.parse(requestedTo);
+    const from =
+      requestedFrom ??
+      (isCsv ? "0001-01-01" : dateInTimezone(new Date(Date.now() - 30 * 86_400_000), household.timezone));
+    const to = requestedTo ?? (isCsv ? "9999-12-31" : today);
+    if (from > to) throw new Error("The report start date must be on or before the end date");
+    const rows = await db<
+      {
+        obligation_id: string;
+        scheduled_for: string;
+        history_date: string;
+        title: string;
+        child: string | null;
+        status: string;
+        approval_status: string;
+        completed_at: Date | null;
+        rescheduled_for: string | null;
+        is_flexible: boolean;
+        schedule_kind: string;
+        weekdays: number[];
+      }[]
+    >`
       SELECT o.id AS obligation_id, co.scheduled_for,
         CASE WHEN ct.is_flexible = true AND o.completed_at IS NOT NULL
           THEN (o.completed_at AT TIME ZONE ${household.timezone})::date
@@ -81,12 +104,47 @@ export async function GET(request: Request) {
 
     if (isCsv) {
       const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-      const body = ["history_date,scheduled_for,rescheduled_for,schedule_kind,weekdays,is_flexible,chore,child,status,approval_status,completed_at", ...rows.map((row) => [row.history_date, row.scheduled_for, row.rescheduled_for, row.schedule_kind, row.weekdays.join(" "), row.is_flexible, row.title, row.child, row.status, row.approval_status, row.completed_at?.toISOString()].map(escape).join(","))].join("\n");
-      return new Response(body, { headers: { "Content-Type": "text/csv", "Content-Disposition": "attachment; filename=homeboard-report.csv" } });
+      const body = [
+        "history_date,scheduled_for,rescheduled_for,schedule_kind,weekdays,is_flexible,chore,child,status,approval_status,completed_at",
+        ...rows.map((row) =>
+          [
+            row.history_date,
+            row.scheduled_for,
+            row.rescheduled_for,
+            row.schedule_kind,
+            row.weekdays.join(" "),
+            row.is_flexible,
+            row.title,
+            row.child,
+            row.status,
+            row.approval_status,
+            row.completed_at?.toISOString(),
+          ]
+            .map(escape)
+            .join(",")
+        ),
+      ].join("\n");
+      return new Response(body, {
+        headers: { "Content-Type": "text/csv", "Content-Disposition": "attachment; filename=homeboard-report.csv" },
+      });
     }
     return NextResponse.json(
-      { from, to, summary: { total, completed, pending, missed, completionRate: total ? Math.round((completed / total) * 100) : 0 }, dailySummary, rows },
+      {
+        from,
+        to,
+        summary: {
+          total,
+          completed,
+          pending,
+          missed,
+          completionRate: total ? Math.round((completed / total) * 100) : 0,
+        },
+        dailySummary,
+        rows,
+      },
       { headers: { "Cache-Control": "no-store, must-revalidate" } }
     );
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }
