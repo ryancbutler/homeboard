@@ -2725,6 +2725,9 @@ progress::-moz-progress-bar {
   font-size: 0.84rem;
   text-align: center;
 }
+.week-picker strong small {
+  display: block;
+}
 .weekly-child-filter {
   justify-content: space-between;
   color: var(--muted);
@@ -2798,8 +2801,7 @@ progress::-moz-progress-bar {
   flex: 0 0 auto;
   color: #4b8c58;
 }
-.attention-card .weekly-card-head > svg,
-.weekly-plan .weekly-card-head > svg {
+.attention-card .weekly-card-head > svg {
   color: #b98032;
 }
 .weekly-chore-row {
@@ -2843,50 +2845,9 @@ progress::-moz-progress-bar {
   background: #fff0d8;
   color: #89561a;
 }
-.weekly-plan ol {
-  display: grid;
-  gap: 14px;
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: weekly-plan;
-}
-.weekly-plan li {
-  display: grid;
-  grid-template-columns: 32px 1fr;
-  column-gap: 12px;
-}
-.weekly-plan li::before {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--lilac);
-  color: var(--purple-dark);
-  content: counter(weekly-plan, decimal-leading-zero);
-  counter-increment: weekly-plan;
-  font-size: 0.72rem;
-  font-weight: 900;
-}
-.weekly-plan li strong {
-  grid-column: 2;
-}
-.weekly-plan li span {
-  grid-column: 2;
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-.weekly-note,
 .weekly-date-note {
   color: var(--muted);
   font-size: 0.75rem;
-}
-.weekly-note {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line);
 }
 .weekly-summary-list {
   display: grid;
@@ -4103,6 +4064,19 @@ input[type="file"]::file-selector-button:hover {
 }
 
 @media (max-width: 520px) {
+  .weekly-review-head {
+    flex-direction: column;
+  }
+  .weekly-controls {
+    width: 100%;
+    min-width: 0;
+  }
+  .weekly-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .weekly-two-column {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .reschedule-dialog {
     padding: 20px 16px;
     border-radius: 18px;

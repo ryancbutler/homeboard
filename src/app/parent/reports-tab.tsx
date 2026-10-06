@@ -2,18 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, CircleAlert, Lightbulb, RefreshCw, Sparkles } from "lucide-react";
-import { mondayFor, shiftDay, summarizeWeeklyRows, type WeeklyChoreSummary } from "@/lib/weekly-report";
+import {
+  mondayFor,
+  reportForWeek,
+  shiftDay,
+  summarizeWeeklyRows,
+  type WeeklyChoreSummary,
+  type WeeklyReportRow,
+} from "@/lib/weekly-report";
 import { useParentControllerContext } from "./parent-controller";
 
 type WeeklyReport = {
   from: string;
   to: string;
-  rows: {
-    history_date: string;
-    title: string;
-    child: string | null;
-    status: string;
-  }[];
+  rows: WeeklyReportRow[];
 };
 
 const formatDate = (date: string, options: Intl.DateTimeFormatOptions) =>
@@ -27,13 +29,15 @@ const formatWeek = (weekStart: string) =>
 
 function SummaryRow({ summary, tone }: { summary: WeeklyChoreSummary; tone: "win" | "attention" }) {
   const completePercent = summary.total ? Math.round((summary.completed / summary.total) * 100) : 0;
-  const attention = summary.missed + summary.rejected;
   return (
     <article className="weekly-chore-row">
       <div>
         <h3>{summary.title}</h3>
         <p>
-          {summary.completed} done · {attention} {attention === 1 ? "missed check-off" : "missed check-offs"}
+          {summary.completed} done
+          {summary.missed > 0 && ` · ${summary.missed} missed`}
+          {summary.rejected > 0 && ` · ${summary.rejected} needs another try`}
+          {summary.pending > 0 && ` · ${summary.pending} waiting for approval`}
           {summary.open > 0 && ` · ${summary.open} still open`}
         </p>
         <div className="weekly-progress" aria-label={`${summary.title}: ${completePercent}% completed`}>
@@ -41,7 +45,7 @@ function SummaryRow({ summary, tone }: { summary: WeeklyChoreSummary; tone: "win
         </div>
       </div>
       <strong className={`weekly-pill ${tone}`}>
-        {tone === "win" ? `${completePercent}%` : `${attention} missed`}
+        {tone === "win" ? `${completePercent}%` : `${summary.missed + summary.rejected} needs help`}
       </strong>
     </article>
   );
@@ -81,12 +85,15 @@ export function ReportsTab() {
     };
   }, [request, weekStart]);
 
-  const summary = useMemo(() => summarizeWeeklyRows(weeklyReport?.rows ?? [], child), [child, weeklyReport?.rows]);
   const weekEnd = weekStart ? shiftDay(weekStart, 6) : "";
+  const displayedReport = reportForWeek(weeklyReport, weekStart);
+  const summary = useMemo(
+    () => summarizeWeeklyRows(displayedReport?.rows ?? [], child),
+    [child, displayedReport?.rows]
+  );
+  const isCurrentWeek = Boolean(latestDate && weekStart === mondayFor(latestDate));
   const nextWeek = weekStart ? shiftDay(weekStart, 7) : "";
   const canMoveForward = Boolean(latestDate && nextWeek && nextWeek <= mondayFor(latestDate));
-  const attention = summary.attention[0];
-  const win = summary.wins.find((item) => item.completed === item.total) ?? summary.wins[0];
 
   return (
     <section className="weekly-review" aria-labelledby="weekly-review-title">
@@ -94,10 +101,7 @@ export function ReportsTab() {
         <div>
           <p className="eyebrow">WEEKLY FAMILY CHECK-IN</p>
           <h2 id="weekly-review-title">Celebrate the wins. Make the hard parts easier.</h2>
-          <p>
-            Use this together to see what was recorded, talk about the gaps, and choose one helpful change for next
-            week.
-          </p>
+          <p>Review completed chores, missed check-offs, and work that still needs attention together.</p>
         </div>
         <div className="weekly-controls">
           <div className="week-picker" aria-label="Report week">
@@ -110,7 +114,10 @@ export function ReportsTab() {
             >
               <ArrowLeft size={16} aria-hidden="true" />
             </button>
-            <strong>{weekStart ? formatWeek(weekStart) : "Loading…"}</strong>
+            <strong>
+              {weekStart ? formatWeek(weekStart) : "Loading…"}
+              {isCurrentWeek && <small className="weekly-date-note"> · Week so far</small>}
+            </strong>
             <button
               type="button"
               className="secondary"
@@ -126,11 +133,11 @@ export function ReportsTab() {
             <select value={child} onChange={(event) => setChild(event.target.value)}>
               <option value="all">Everyone</option>
               {children.map((member) => (
-                <option key={member.id} value={member.displayName}>
+                <option key={member.id} value={member.id}>
                   {member.displayName}
                 </option>
               ))}
-              <option value="Shared">Shared chores</option>
+              <option value="shared">Shared chores</option>
             </select>
           </label>
         </div>
@@ -141,9 +148,13 @@ export function ReportsTab() {
           {error}
         </p>
       )}
-      {loading && !weeklyReport ? <p className="form-hint">Gathering this week&apos;s check-offs…</p> : null}
+      {(loading || !displayedReport) && !error ? (
+        <p className="form-hint" role="status">
+          Gathering this week&apos;s check-offs…
+        </p>
+      ) : null}
 
-      {weeklyReport && (
+      {displayedReport && (
         <>
           <div className="weekly-stat-grid" aria-label={`Weekly report for ${formatWeek(weekStart)}`}>
             <article>
@@ -154,15 +165,17 @@ export function ReportsTab() {
             </article>
             <article>
               <Sparkles size={20} aria-hidden="true" />
-              <span>Scheduled completion</span>
-              <strong>{summary.completionRate}%</strong>
-              <small>for {formatWeek(weekStart)}</small>
+              <span>{isCurrentWeek ? "Completion so far" : "Completion"}</span>
+              <strong>{summary.completionRate === null ? "No activity" : `${summary.completionRate}%`}</strong>
+              <small>Open chores and those waiting for approval count toward the total.</small>
             </article>
             <article>
               <CircleAlert size={20} aria-hidden="true" />
               <span>Needs a conversation</span>
               <strong>{summary.missed + summary.rejected}</strong>
-              <small>{summary.rejected ? `${summary.rejected} needs another try` : "missed check-offs"}</small>
+              <small>
+                {summary.missed} missed · {summary.rejected} needs another try
+              </small>
             </article>
             <article>
               <RefreshCw size={20} aria-hidden="true" />
@@ -211,45 +224,6 @@ export function ReportsTab() {
               )}
             </section>
           </div>
-
-          <section className="management-card weekly-plan">
-            <div className="weekly-card-head">
-              <div>
-                <p className="eyebrow">ONE SMALL EXPERIMENT</p>
-                <h2>A gentle plan for next week</h2>
-              </div>
-              <Lightbulb size={22} aria-hidden="true" />
-            </div>
-            <ol>
-              <li>
-                <strong>{attention ? `Talk about ${attention.title}` : "Name one routine that worked"}</strong>
-                <span>
-                  {attention
-                    ? `${attention.missed + attention.rejected} check-off${attention.missed + attention.rejected === 1 ? "" : "s"} need attention. Ask what got in the way before deciding what to change.`
-                    : "Ask what made it easier to remember, then keep that cue."}
-                </span>
-              </li>
-              <li>
-                <strong>Check the check-off</strong>
-                <span>
-                  A missed record may mean the chore was forgotten, the check-off was forgotten, or the timing did not
-                  work. Let the child explain.
-                </span>
-              </li>
-              <li>
-                <strong>{win ? `Borrow a cue from ${win.title}` : "Choose one small shared cue"}</strong>
-                <span>
-                  {win
-                    ? `It had ${win.completed} recorded completion${win.completed === 1 ? "" : "s"}. Try its reminder, time, or location for the harder chore.`
-                    : "Pick a visual reminder, a routine partner, or a more realistic time — then revisit it next week."}
-                </span>
-              </li>
-            </ol>
-            <p className="weekly-note">
-              This is a conversation guide, not a scorecard. Open and approval-pending chores are kept separate from
-              missed work.
-            </p>
-          </section>
 
           <section className="management-card weekly-detail-card">
             <div className="history-head">
