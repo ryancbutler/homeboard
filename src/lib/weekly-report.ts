@@ -2,6 +2,8 @@ export type WeeklyReportRow = {
   history_date: string;
   title: string;
   child: string | null;
+  child_id: string | null;
+  is_shared: boolean;
   status: string;
 };
 
@@ -28,8 +30,15 @@ export function shiftDay(day: string, amount: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+/** Keep previously fetched data out of a newly selected week's view. */
+export function reportForWeek<T extends { from: string; to: string }>(report: T | null, weekStart: string): T | null {
+  return weekStart && report?.from === weekStart && report.to === shiftDay(weekStart, 6) ? report : null;
+}
+
 export function summarizeWeeklyRows(rows: WeeklyReportRow[], child = "all") {
-  const selectedRows = rows.filter((row) => child === "all" || row.child === child);
+  const selectedRows = rows.filter(
+    (row) => child === "all" || (child === "shared" ? row.is_shared : row.child_id === child)
+  );
   const chores = new Map<string, WeeklyChoreSummary>();
 
   for (const row of selectedRows) {
@@ -66,7 +75,7 @@ export function summarizeWeeklyRows(rows: WeeklyReportRow[], child = "all") {
     open,
     pending,
     rejected,
-    completionRate: selectedRows.length ? Math.round((completed / selectedRows.length) * 100) : 0,
+    completionRate: selectedRows.length ? Math.round((completed / selectedRows.length) * 100) : null,
     wins: [...choreSummaries]
       .filter((summary) => summary.completed > 0)
       .sort(

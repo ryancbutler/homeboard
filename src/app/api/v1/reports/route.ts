@@ -37,6 +37,8 @@ export async function GET(request: Request) {
         history_date: string;
         title: string;
         child: string | null;
+        child_id: string | null;
+        assignment_policy: string;
         status: string;
         approval_status: string;
         completed_at: Date | null;
@@ -52,6 +54,7 @@ export async function GET(request: Request) {
           ELSE co.scheduled_for
         END AS history_date,
         ct.title, COALESCE(assignee.display_name, completed.display_name) AS child,
+        COALESCE(o.member_id, o.completed_by) AS child_id, ct.assignment_policy,
         o.status, o.approval_status, o.completed_at, replacement_occurrence.scheduled_for AS rescheduled_for,
         ct.is_flexible, ct.schedule_kind, COALESCE(ct.weekdays, '{}') AS weekdays
       FROM chore_obligations o JOIN chore_occurrences co ON co.id = o.occurrence_id
@@ -60,14 +63,11 @@ export async function GET(request: Request) {
       LEFT JOIN members completed ON completed.id = o.completed_by
       LEFT JOIN chore_obligations replacement ON replacement.rescheduled_from_obligation_id = o.id
       LEFT JOIN chore_occurrences replacement_occurrence ON replacement_occurrence.id = replacement.occurrence_id
-      WHERE co.household_id = ${context.householdId} AND (
-        co.scheduled_for BETWEEN ${from} AND ${to}
-        OR (
-          ct.is_flexible = true
-          AND o.completed_at IS NOT NULL
-          AND (o.completed_at AT TIME ZONE ${household.timezone})::date BETWEEN ${from} AND ${to}
-        )
-      )
+      WHERE co.household_id = ${context.householdId} AND
+        CASE WHEN ct.is_flexible = true AND o.completed_at IS NOT NULL
+          THEN (o.completed_at AT TIME ZONE ${household.timezone})::date
+          ELSE co.scheduled_for
+        END BETWEEN ${from} AND ${to}
       ORDER BY history_date DESC, ct.title`;
 
     // Today's daily metrics
@@ -76,14 +76,11 @@ export async function GET(request: Request) {
       FROM chore_obligations o
       JOIN chore_occurrences co ON co.id = o.occurrence_id
       JOIN chore_templates ct ON ct.id = co.chore_template_id
-      WHERE co.household_id = ${context.householdId} AND (
-        co.scheduled_for = ${today}
-        OR (
-          ct.is_flexible = true
-          AND o.completed_at IS NOT NULL
-          AND (o.completed_at AT TIME ZONE ${household.timezone})::date = ${today}
-        )
-      )`;
+      WHERE co.household_id = ${context.householdId} AND
+        CASE WHEN ct.is_flexible = true AND o.completed_at IS NOT NULL
+          THEN (o.completed_at AT TIME ZONE ${household.timezone})::date
+          ELSE co.scheduled_for
+        END = ${today}`;
 
     const dailyTotal = todayRows.length;
     const dailyCompleted = todayRows.filter((r) => r.status === "completed").length;
@@ -140,7 +137,7 @@ export async function GET(request: Request) {
           completionRate: total ? Math.round((completed / total) * 100) : 0,
         },
         dailySummary,
-        rows,
+        rows: rows.map((row) => ({ ...row, is_shared: row.assignment_policy === "any" })),
       },
       { headers: { "Cache-Control": "no-store, must-revalidate" } }
     );

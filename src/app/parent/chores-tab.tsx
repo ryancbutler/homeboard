@@ -2,7 +2,6 @@
 
 import { Pencil, Search, Sparkles, Trash2, X } from "lucide-react";
 import { useParentControllerContext } from "./parent-controller";
-import { compareDailyItems } from "@/lib/day-order";
 
 export function ChoresTab() {
   const {
@@ -44,6 +43,9 @@ export function ChoresTab() {
     resolveTaskIcon,
     CHORE_ICONS,
   } = useParentControllerContext();
+  const sortedChores = [...choreTemplates].sort((a, b) =>
+    a.title.localeCompare(b.title, "en", { sensitivity: "base", numeric: true })
+  );
   return (
     <div className="parent-grid" id="chore-form-section">
       <section className="management-card">
@@ -309,7 +311,7 @@ export function ChoresTab() {
         <p className="eyebrow">ACTIVE CHORES</p>
         <h2>Existing chores ({choreTemplates.length})</h2>
         <div className="template-list">
-          {[...choreTemplates].sort(compareDailyItems).map((chore) => (
+          {sortedChores.map((chore) => (
             <div className="template-row" key={chore.id}>
               <div className="template-item-main">
                 <span className="template-icon-badge" aria-hidden="true">
