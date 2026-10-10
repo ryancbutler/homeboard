@@ -162,6 +162,7 @@ export function ApprovalsTab() {
             <option value="pending">Pending approval</option>
             <option value="open">Open</option>
             <option value="missed">Missed</option>
+            <option value="excused">Excused — away</option>
             <option value="rejected">Try again</option>
           </select>
 
@@ -235,7 +236,9 @@ export function ApprovalsTab() {
                     </td>
                     <td>{row.child ?? "Shared"}</td>
                     <td>
-                      <span className={`pill ${row.status}`}>{row.status}</span>
+                      <span className={`pill ${row.status}`}>
+                        {row.status === "excused" ? "Excused — away" : row.status}
+                      </span>
                       {row.status === "completed" && completedTime && (
                         <small className="status-time-hint">{completedTime}</small>
                       )}

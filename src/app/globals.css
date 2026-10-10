@@ -4091,3 +4091,155 @@ input[type="file"]::file-selector-button:hover {
     width: 100%;
   }
 }
+
+/* Time away uses the same calm cards and controls as the family console. */
+.vacation-card {
+  margin-top: 24px;
+}
+.vacation-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vacation-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+.vacation-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.vacation-form legend {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.vacation-children,
+.vacation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.vacation-children label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  cursor: pointer;
+}
+.vacation-children input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--purple);
+}
+.vacation-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.vacation-dates label {
+  display: grid;
+  gap: 6px;
+  font-weight: 800;
+  min-width: 0;
+}
+.vacation-dates input {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+}
+.vacation-return {
+  color: var(--purple-dark);
+  font-weight: 800;
+}
+.vacation-ranges {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.vacation-range {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.vacation-range h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.vacation-range p {
+  color: var(--muted);
+  margin-top: 6px;
+}
+.vacation-actions button {
+  min-height: 44px;
+}
+.pill.excused {
+  background: var(--lilac);
+  color: var(--purple-dark);
+}
+.child-away-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.away-message {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 28px 12px;
+  color: var(--muted);
+}
+.away-message svg,
+.away-message strong {
+  color: var(--purple-dark);
+}
+.away-message strong {
+  font-size: 1.1rem;
+}
+:is(.child-progress-card, .parent-progress-card).child-away-card .child-col-header {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+:is(.child-progress-card, .parent-progress-card).child-away-card .child-avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 1rem;
+}
+:is(.child-progress-card, .parent-progress-card).child-away-card .child-name {
+  font-size: 1rem;
+}
+:is(.child-progress-card, .parent-progress-card).child-away-card .away-message {
+  padding: 12px 0;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+:is(.child-progress-card, .parent-progress-card).child-away-card .away-message strong {
+  font-size: 1rem;
+}
+:is(.child-progress-card, .parent-progress-card).child-away-card .away-message svg {
+  width: 20px;
+  height: 20px;
+}
+@media (max-width: 600px) {
+  .vacation-dates {
+    grid-template-columns: 1fr;
+  }
+  .vacation-range {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

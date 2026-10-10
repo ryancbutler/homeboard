@@ -12,12 +12,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const { decision, note } = bodySchema.parse(await request.json());
     const rows = await db<{ id: string }[]>`
-      UPDATE chore_obligations o SET status = ${decision === "approve" ? "completed" : "rejected"},
+      UPDATE chore_obligations SET status = ${decision === "approve" ? "completed" : "rejected"},
         approval_status = ${decision === "approve" ? "approved" : "rejected"}, reviewed_by = ${context.memberId!},
         reviewed_at = now(), rejection_note = ${note ?? null}
-      FROM chore_occurrences co WHERE o.id = ${id} AND o.occurrence_id = co.id
-        AND co.household_id = ${context.householdId} AND o.status = 'pending' RETURNING o.id`;
+      WHERE id = ${id} AND occurrence_id IN (
+        SELECT id FROM chore_occurrences WHERE household_id = ${context.householdId}
+      ) AND status = 'pending' RETURNING id`;
     if (!rows[0]) throw new Error("No pending completion found");
     return NextResponse.json({ ok: true });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }

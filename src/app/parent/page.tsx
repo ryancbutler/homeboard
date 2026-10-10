@@ -1,5 +1,6 @@
 "use client";
 
+import { AwayCard } from "@/components/away-card";
 import { useEffect, useRef } from "react";
 import {
   ArrowLeft,
@@ -166,60 +167,64 @@ function ParentContent() {
         ) : (
           <>
             <div className="parent-progress-grid">
-              {familyToday.children.map((child) => (
-                <article className="parent-progress-card" key={child.id}>
-                  <div className="parent-progress-heading">
-                    <span
-                      className="parent-progress-avatar"
-                      style={{ backgroundColor: child.color }}
-                      aria-hidden="true"
-                    >
-                      {child.name.slice(0, 1)}
-                    </span>
-                    <div>
-                      <h3>{child.name}</h3>
-                      <p>
-                        {child.openChores
-                          ? `${child.openChores} chore${child.openChores === 1 ? "" : "s"} left`
-                          : "Chores are done"}
-                      </p>
+              {familyToday.children.map((child) =>
+                child.away ? (
+                  <AwayCard key={child.id} child={child} className="parent-progress-card" headingLevel={3} />
+                ) : (
+                  <article className="parent-progress-card" key={child.id}>
+                    <div className="parent-progress-heading">
+                      <span
+                        className="parent-progress-avatar"
+                        style={{ backgroundColor: child.color }}
+                        aria-hidden="true"
+                      >
+                        {child.name.slice(0, 1)}
+                      </span>
+                      <div>
+                        <h3>{child.name}</h3>
+                        <p>
+                          {child.openChores
+                            ? `${child.openChores} chore${child.openChores === 1 ? "" : "s"} left`
+                            : "Chores are done"}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="parent-progress-metric">
-                    <div>
-                      <span>Chores</span>
-                      <strong>
-                        {child.totalChores ? `${child.finishedChores} / ${child.totalChores}` : "None today"}
-                      </strong>
+                    <div className="parent-progress-metric">
+                      <div>
+                        <span>Chores</span>
+                        <strong>
+                          {child.totalChores ? `${child.finishedChores} / ${child.totalChores}` : "None today"}
+                        </strong>
+                      </div>
+                      {child.totalChores > 0 && (
+                        <progress
+                          value={child.finishedChores}
+                          max={child.totalChores}
+                          aria-label={`${child.name}: ${child.finishedChores} of ${child.totalChores} chores finished`}
+                        />
+                      )}
                     </div>
-                    {child.totalChores > 0 && (
-                      <progress
-                        value={child.finishedChores}
-                        max={child.totalChores}
-                        aria-label={`${child.name}: ${child.finishedChores} of ${child.totalChores} chores finished`}
-                      />
-                    )}
-                  </div>
-                  <div className="parent-progress-metric">
-                    <div>
-                      <span>Routine steps</span>
-                      <strong>
-                        {child.totalRoutineSteps
-                          ? `${child.completedRoutineSteps} / ${child.totalRoutineSteps}`
-                          : "None today"}
-                      </strong>
+                    <div className="parent-progress-metric">
+                      <div>
+                        <span>Routine steps</span>
+                        <strong>
+                          {child.totalRoutineSteps
+                            ? `${child.completedRoutineSteps} / ${child.totalRoutineSteps}`
+                            : "None today"}
+                        </strong>
+                      </div>
+                      {child.totalRoutineSteps > 0 && (
+                        <progress
+                          value={child.completedRoutineSteps}
+                          max={child.totalRoutineSteps}
+                          aria-label={`${child.name}: ${child.completedRoutineSteps} of ${child.totalRoutineSteps} routine steps complete`}
+                        />
+                      )}
                     </div>
-                    {child.totalRoutineSteps > 0 && (
-                      <progress
-                        value={child.completedRoutineSteps}
-                        max={child.totalRoutineSteps}
-                        aria-label={`${child.name}: ${child.completedRoutineSteps} of ${child.totalRoutineSteps} routine steps complete`}
-                      />
-                    )}
-                  </div>
-                </article>
-              ))}
+                  </article>
+                )
+              )}
             </div>
 
             {familyToday.sharedOpenChores > 0 && (

@@ -14,7 +14,8 @@ type Sql = {
 // Helm deployments keep their existing PostgreSQL DATABASE_URL. A file: URL opts
 // into SQLite, including the Compose default (file:/data/homeboard.db).
 const url = process.env.DATABASE_URL ?? "postgres://missing:missing@127.0.0.1:5432/missing";
-export const databaseDialect: DatabaseDialect = url.startsWith("file:") || url.startsWith("libsql:") ? "sqlite" : "postgres";
+export const databaseDialect: DatabaseDialect =
+  url.startsWith("file:") || url.startsWith("libsql:") ? "sqlite" : "postgres";
 
 function sqliteValue(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
@@ -24,63 +25,87 @@ function sqliteValue(value: unknown): unknown {
 }
 
 function sqliteSql(sql: string): string {
-  return sql
-    .replaceAll("now()", "CURRENT_TIMESTAMP")
-    // Keep the bound timezone argument so placeholder positions remain stable.
-    // SQLite stores timestamps in UTC; its built-in date conversion is therefore UTC.
-    .replace(/\(([^()]+) AT TIME ZONE \?\)::date/g, "date($1, CASE WHEN ? IS NOT NULL THEN 'utc' END)")
-    .replace(/\(CURRENT_TIMESTAMP AT TIME ZONE \?\)::date/g, "date('now', CASE WHEN ? IS NOT NULL THEN 'utc' END)")
-    .replace(/CURRENT_TIMESTAMP \+ interval '30 days'/g, "datetime('now', '+30 days')")
-    .replace(/CURRENT_TIMESTAMP - \?::interval/g, "datetime('now', '-' || ?)")
-    .replace(/CURRENT_TIMESTAMP \+ \?::interval/g, "datetime('now', '+' || ?)")
-    .replace(/([\w.]+) > CURRENT_TIMESTAMP/g, "datetime($1) > CURRENT_TIMESTAMP")
-    .replaceAll("::text", "")
-    .replaceAll(" FOR UPDATE", "")
-    .replace(/DELETE FROM chore_obligations o USING chore_occurrences c WHERE o\.occurrence_id = c\.id AND ([\s\S]*)$/g, "DELETE FROM chore_obligations WHERE id IN (SELECT o.id FROM chore_obligations o JOIN chore_occurrences c ON o.occurrence_id = c.id WHERE $1)")
-    .replace(/UPDATE chore_obligations o SET([\s\S]*?)FROM chore_occurrences co WHERE o\.id = \? AND o\.occurrence_id = co\.id AND co\.household_id = \? AND o\.status = 'pending' RETURNING o\.id/g, "UPDATE chore_obligations SET$1WHERE id = ? AND occurrence_id IN (SELECT id FROM chore_occurrences WHERE household_id = ?) AND status = 'pending' RETURNING id")
-    .replaceAll("'{}'", "'[]'");
+  return (
+    sql
+      .replaceAll("now()", "CURRENT_TIMESTAMP")
+      // Keep the bound timezone argument so placeholder positions remain stable.
+      // SQLite stores timestamps in UTC; its built-in date conversion is therefore UTC.
+      .replace(/\(([^()]+) AT TIME ZONE \?\)::date/g, "date($1, CASE WHEN ? IS NOT NULL THEN 'utc' END)")
+      .replace(/\(CURRENT_TIMESTAMP AT TIME ZONE \?\)::date/g, "date('now', CASE WHEN ? IS NOT NULL THEN 'utc' END)")
+      .replace(/CURRENT_TIMESTAMP \+ interval '30 days'/g, "datetime('now', '+30 days')")
+      .replace(/CURRENT_TIMESTAMP - \?::interval/g, "datetime('now', '-' || ?)")
+      .replace(/CURRENT_TIMESTAMP \+ \?::interval/g, "datetime('now', '+' || ?)")
+      .replace(/([\w.]+) > CURRENT_TIMESTAMP/g, "datetime($1) > CURRENT_TIMESTAMP")
+      // Completion timestamps can be ISO strings or SQLite CURRENT_TIMESTAMP values.
+      .replace(/o\.completed_at BETWEEN \? AND \?/g, "julianday(o.completed_at) BETWEEN julianday(?) AND julianday(?)")
+      .replaceAll("::text", "")
+      .replaceAll(" FOR UPDATE", "")
+      .replace(
+        /DELETE FROM chore_obligations o USING chore_occurrences c WHERE o\.occurrence_id = c\.id AND ([\s\S]*)$/g,
+        "DELETE FROM chore_obligations WHERE id IN (SELECT o.id FROM chore_obligations o JOIN chore_occurrences c ON o.occurrence_id = c.id WHERE $1)"
+      )
+      .replace(
+        /UPDATE chore_obligations o SET([\s\S]*?)FROM chore_occurrences co WHERE o\.id = \? AND o\.occurrence_id = co\.id AND co\.household_id = \? AND o\.status = 'pending' RETURNING o\.id/g,
+        "UPDATE chore_obligations SET$1WHERE id = ? AND occurrence_id IN (SELECT id FROM chore_occurrences WHERE household_id = ?) AND status = 'pending' RETURNING id"
+      )
+      .replaceAll("'{}'", "'[]'")
+  );
 }
 
 function normalizeRows(rows: Record<string, unknown>[]) {
-  return rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => {
-    if (key.endsWith("_at") && typeof value === "string") {
-      const timestamp = value.replace(" ", "T");
-      return [key, new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(timestamp) ? timestamp : `${timestamp}Z`)];
-    }
-    if (key === "weekdays" && typeof value === "string") {
-      try { return [key, JSON.parse(value)]; } catch { return [key, value]; }
-    }
-    return [key, value];
-  })));
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => {
+        if (key.endsWith("_at") && typeof value === "string") {
+          const timestamp = value.replace(" ", "T");
+          return [key, new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(timestamp) ? timestamp : `${timestamp}Z`)];
+        }
+        if (key === "weekdays" && typeof value === "string") {
+          try {
+            return [key, JSON.parse(value)];
+          } catch {
+            return [key, value];
+          }
+        }
+        return [key, value];
+      })
+    )
+  );
 }
 
 function makeSqliteSql(client: Client | Transaction): Sql {
   const sql = ((strings: TemplateStringsArray | Record<string, unknown>, ...values: unknown[]) => {
     if (!Array.isArray(strings) || !("raw" in strings)) {
       const entries = Object.entries(strings);
-      return { text: entries.map(([key]) => `\"${key}\" = ?`).join(", "), values: entries.map(([, value]) => value) } satisfies SqlFragment;
+      return {
+        text: entries.map(([key]) => `\"${key}\" = ?`).join(", "),
+        values: entries.map(([, value]) => value),
+      } satisfies SqlFragment;
     }
     return (async <T = Record<string, unknown>[]>(): Promise<T> => {
-    const args: unknown[] = [];
-    let statement = strings[0];
-    for (let index = 0; index < values.length; index++) {
-      const value = values[index];
-      const next = strings[index + 1];
-      if (Array.isArray(value) && /ANY\($/i.test(statement) && /^\)/.test(next)) {
-        statement = statement.replace(/=\s*ANY\($/i, value.length ? `IN (${value.map(() => "?").join(", ")}` : "IN (NULL)");
-        args.push(...value.map(sqliteValue));
-      } else if (typeof value === "object" && value && "text" in value && "values" in value) {
-        const fragment = value as SqlFragment;
-        statement += fragment.text;
-        args.push(...fragment.values.map(sqliteValue));
-      } else {
-        statement += "?";
-        args.push(sqliteValue(value));
+      const args: unknown[] = [];
+      let statement = strings[0];
+      for (let index = 0; index < values.length; index++) {
+        const value = values[index];
+        const next = strings[index + 1];
+        if (Array.isArray(value) && /ANY\($/i.test(statement) && /^\)/.test(next)) {
+          statement = statement.replace(
+            /=\s*ANY\($/i,
+            value.length ? `IN (${value.map(() => "?").join(", ")}` : "IN (NULL)"
+          );
+          args.push(...value.map(sqliteValue));
+        } else if (typeof value === "object" && value && "text" in value && "values" in value) {
+          const fragment = value as SqlFragment;
+          statement += fragment.text;
+          args.push(...fragment.values.map(sqliteValue));
+        } else {
+          statement += "?";
+          args.push(sqliteValue(value));
+        }
+        statement += next;
       }
-      statement += next;
-    }
-    const result = await client.execute({ sql: sqliteSql(statement), args: args as never });
-    return normalizeRows(result.rows as Record<string, unknown>[]) as T;
+      const result = await client.execute({ sql: sqliteSql(statement), args: args as never });
+      return normalizeRows(result.rows as Record<string, unknown>[]) as T;
     })();
   }) as Sql;
   sql.begin = async <T>(callback: (transaction: Sql) => Promise<T>) => {
@@ -94,15 +119,23 @@ function makeSqliteSql(client: Client | Transaction): Sql {
       throw error;
     }
   };
-  sql.unsafe = async (statement) => { await client.executeMultiple(sqliteSql(statement)); };
-  sql.end = async () => { if ("close" in client) client.close(); };
+  sql.unsafe = async (statement) => {
+    await client.executeMultiple(sqliteSql(statement));
+  };
+  sql.end = async () => {
+    if ("close" in client) client.close();
+  };
   return sql;
 }
 
 function makePostgresSql(): Sql {
   const client = postgres(url, {
-    types: { calendarDate: { to: 1082, from: [1082], serialize: (value: string) => value, parse: (value: string) => value } },
-    max: Number(process.env.DATABASE_POOL_SIZE ?? 10), idle_timeout: 20, connect_timeout: 10
+    types: {
+      calendarDate: { to: 1082, from: [1082], serialize: (value: string) => value, parse: (value: string) => value },
+    },
+    max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
+    idle_timeout: 20,
+    connect_timeout: 10,
   });
   return client as unknown as Sql;
 }

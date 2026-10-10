@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { requireContext } from "@/lib/auth";
 import { apiError, idempotencyKey } from "@/lib/http";
 import { databaseIdSchema } from "@/lib/id-validation";
+import { loadVacationContext } from "@/lib/member-absence-store";
+import { dateInTimezone } from "@/lib/dates";
 
 const bodySchema = z.object({ actorId: databaseIdSchema });
 
@@ -22,23 +24,40 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           assignment_policy: "individual" | "any" | "every";
           approval_required: boolean;
           template_id: string;
+          scheduled_for: string;
+          timezone: string;
         }[]
       >`
-        SELECT co.household_id, o.status, o.member_id, ct.assignment_policy, ct.approval_required, ct.id AS template_id
+        SELECT co.household_id, co.scheduled_for, h.timezone, o.status, o.member_id, ct.assignment_policy, ct.approval_required, ct.id AS template_id
         FROM chore_obligations o JOIN chore_occurrences co ON co.id = o.occurrence_id
-        JOIN chore_templates ct ON ct.id = co.chore_template_id WHERE o.id = ${id} FOR UPDATE`;
+        JOIN chore_templates ct ON ct.id = co.chore_template_id
+        JOIN households h ON h.id = co.household_id WHERE o.id = ${id} FOR UPDATE`;
       const obligation = rows[0];
       if (!obligation || obligation.household_id !== context.householdId) throw new Error("Forbidden");
       if (!["open", "rejected"].includes(obligation.status)) return { alreadyDone: true };
       const actors = await tx<{ role: "parent" | "child" }[]>`
         SELECT role FROM members WHERE id = ${actorId} AND household_id = ${context.householdId} AND active = true`;
       if (!actors[0]) throw new Error("Forbidden");
+      const vacation = await loadVacationContext(context.householdId, tx);
+      const today = dateInTimezone(new Date(), obligation.timezone);
+      if (
+        vacation.isAway(actorId, today) ||
+        (obligation.member_id && vacation.isAway(obligation.member_id, today)) ||
+        vacation.choreStatus(
+          obligation.template_id,
+          obligation.member_id,
+          obligation.assignment_policy,
+          obligation.scheduled_for,
+          obligation.status
+        ) === "excused"
+      ) {
+        throw new Error("This chore is paused while away. Update the vacation dates in Parent mode to resume it.");
+      }
       if (obligation.member_id && obligation.member_id !== actorId && context.role !== "parent")
         throw new Error("Forbidden");
       if (!obligation.member_id && obligation.assignment_policy === "any") {
-        const allowed = await tx<{ exists: boolean }[]>`
-          SELECT EXISTS(SELECT 1 FROM chore_template_assignees WHERE chore_template_id = ${obligation.template_id} AND member_id = ${actorId}) AS exists`;
-        if (!allowed[0]?.exists && actors[0].role !== "parent") throw new Error("Forbidden");
+        if (!vacation.eligibleIds("chore", obligation.template_id).includes(actorId) && actors[0].role !== "parent")
+          throw new Error("Forbidden");
       }
       const pending = obligation.approval_required;
       const update = await tx<{ status: string; approval_status: string }[]>`

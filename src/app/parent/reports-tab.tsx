@@ -161,12 +161,14 @@ export function ReportsTab() {
               <CheckCircle2 size={20} aria-hidden="true" />
               <span>Recorded complete</span>
               <strong>{summary.completed}</strong>
-              <small>of {summary.rows.length} scheduled check-offs</small>
+              <small>
+                of {summary.total} expected check-offs · {summary.excused} excused while away
+              </small>
             </article>
             <article>
               <Sparkles size={20} aria-hidden="true" />
               <span>{isCurrentWeek ? "Completion so far" : "Completion"}</span>
-              <strong>{summary.completionRate === null ? "No activity" : `${summary.completionRate}%`}</strong>
+              <strong>{summary.completionRate === null ? "No expected chores" : `${summary.completionRate}%`}</strong>
               <small>Open chores and those waiting for approval count toward the total.</small>
             </article>
             <article>
@@ -245,6 +247,7 @@ export function ReportsTab() {
                     {item.open > 0 && <span className="pill open">{item.open} open</span>}
                     {item.pending > 0 && <span className="pill pending">{item.pending} pending</span>}
                     {item.rejected > 0 && <span className="pill rejected">{item.rejected} try again</span>}
+                    {item.excused > 0 && <span className="pill excused">{item.excused} excused — away</span>}
                   </div>
                 </article>
               ))}

@@ -7,6 +7,7 @@ import { ChoreTemplate, useChoreManagement } from "./use-chore-management";
 import { RoutineTemplate, useRoutineManagement } from "./use-routine-management";
 import type { ChoreGroup, ChoreGroupRotation, Member } from "./parent-types";
 import { useGroupManagement } from "./use-group-management";
+import type { MemberAbsence } from "@/lib/member-absence";
 
 type ReportRow = {
   obligation_id: string;
@@ -38,6 +39,7 @@ type ReportSummary = {
   completed: number;
   pending: number;
   missed: number;
+  excused: number;
   completionRate: number;
 };
 
@@ -88,6 +90,7 @@ function useParentController() {
   const [activeTab, setActiveTab] = useState<NavTab>("approvals");
 
   const [members, setMembers] = useState<Member[]>([]);
+  const [absences, setAbsences] = useState<MemberAbsence[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [groups, setGroups] = useState<ChoreGroup[]>([]);
   const [rotations, setRotations] = useState<ChoreGroupRotation[]>([]);
@@ -112,7 +115,7 @@ function useParentController() {
   const [rescheduleDialog, setRescheduleDialog] = useState<RescheduleDialog | null>(null);
 
   const load = async () => {
-    const [nextMembers, nextReport, nextGroups, nextRotations, nextChores, nextRoutines, nextDashboard] =
+    const [nextMembers, nextReport, nextGroups, nextRotations, nextChores, nextRoutines, nextDashboard, nextAbsences] =
       await Promise.all([
         request<Member[]>("/api/v1/members"),
         request<Report>("/api/v1/reports"),
@@ -121,8 +124,10 @@ function useParentController() {
         request<ChoreTemplate[]>("/api/v1/chore-templates"),
         request<RoutineTemplate[]>("/api/v1/routine-templates"),
         request<DashboardData>("/api/v1/dashboard"),
+        request<MemberAbsence[]>("/api/v1/member-absences"),
       ]);
     setMembers(nextMembers);
+    setAbsences(nextAbsences);
     setReport(nextReport);
     setGroups(nextGroups);
     setRotations(nextRotations);
@@ -322,6 +327,7 @@ function useParentController() {
       const res = await request<{
         success: boolean;
         importedChildren?: number;
+        importedAbsences: number;
         importedGroups: number;
         importedChores: number;
         importedRoutines: number;
@@ -333,7 +339,7 @@ function useParentController() {
       });
       const skipped = res.skippedChores + res.skippedRoutines;
       setNotice(
-        `Import complete: added ${res.importedChildren ? `${res.importedChildren} children, ` : ""}${res.importedChores} chores, ${res.importedRoutines} routines, and ${res.importedGroups} groups.${skipped ? ` Left ${skipped} matching chore or routine${skipped === 1 ? "" : "s"} unchanged.` : ""}`
+        `Import complete: added ${res.importedChildren ? `${res.importedChildren} children, ` : ""}${res.importedChores} chores, ${res.importedRoutines} routines, ${res.importedGroups} groups, and ${res.importedAbsences} away ranges.${skipped ? ` Left ${skipped} matching chore or routine${skipped === 1 ? "" : "s"} unchanged.` : ""}`
       );
       clearImportFile();
       (event.target as HTMLFormElement).reset();
@@ -417,6 +423,7 @@ function useParentController() {
     activeTab,
     setActiveTab,
     members,
+    absences,
     report,
     groups,
     rotations,
