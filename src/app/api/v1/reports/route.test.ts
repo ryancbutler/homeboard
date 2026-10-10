@@ -17,13 +17,17 @@ describe("report history boundaries", () => {
     vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));
     await db.unsafe(`
       CREATE TABLE households (id TEXT PRIMARY KEY, timezone TEXT);
-      CREATE TABLE members (id TEXT PRIMARY KEY, display_name TEXT);
-      CREATE TABLE chore_templates (id TEXT PRIMARY KEY, title TEXT, is_flexible INTEGER, schedule_kind TEXT, weekdays TEXT, assignment_policy TEXT);
+      CREATE TABLE members (id TEXT PRIMARY KEY, display_name TEXT, household_id TEXT DEFAULT 'home', role TEXT DEFAULT 'child', active INTEGER DEFAULT 1);
+      CREATE TABLE chore_templates (id TEXT PRIMARY KEY, title TEXT, is_flexible INTEGER, schedule_kind TEXT, weekdays TEXT, assignment_policy TEXT, household_id TEXT DEFAULT 'home');
+      CREATE TABLE member_absences (id TEXT PRIMARY KEY, household_id TEXT, member_id TEXT, start_date TEXT, end_date TEXT);
+      CREATE TABLE chore_template_assignees (chore_template_id TEXT, member_id TEXT);
+      CREATE TABLE routine_templates (id TEXT PRIMARY KEY, household_id TEXT);
+      CREATE TABLE routine_template_assignees (routine_template_id TEXT, member_id TEXT);
       CREATE TABLE chore_occurrences (id TEXT PRIMARY KEY, chore_template_id TEXT, household_id TEXT, scheduled_for TEXT);
       CREATE TABLE chore_obligations (id TEXT PRIMARY KEY, occurrence_id TEXT, member_id TEXT, completed_by TEXT, status TEXT, approval_status TEXT, completed_at TEXT, rescheduled_from_obligation_id TEXT);
       INSERT INTO households VALUES ('home', 'UTC'), ('other', 'UTC');
-      INSERT INTO members VALUES ('child-a', 'Alex');
-      INSERT INTO chore_templates VALUES ('flex', 'Fold Laundry', 1, 'weekly', '[1]', 'any'), ('daily', 'Read', 0, 'daily', '[]', 'individual');
+      INSERT INTO members (id, display_name) VALUES ('child-a', 'Alex');
+      INSERT INTO chore_templates (id, title, is_flexible, schedule_kind, weekdays, assignment_policy) VALUES ('flex', 'Fold Laundry', 1, 'weekly', '[1]', 'any'), ('daily', 'Read', 0, 'daily', '[]', 'individual');
       INSERT INTO chore_occurrences VALUES
         ('early', 'flex', 'home', '2026-10-05'),
         ('late', 'flex', 'home', '2026-10-04'),

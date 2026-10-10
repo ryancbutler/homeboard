@@ -11,9 +11,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions and the pull-
 - Schedule chores once, daily, on weekdays, or on selected days of the week.
 - Assign chores to one child, every selected child, or any child; organize related chores into groups and rotate two groups weekly between two children.
 - Set due times, mark missed chores automatically, and require parent approval when needed.
+- Schedule vacation dates under Parent → Family to pause a child's chores and routines and excuse unfinished away-day work from completion rates.
 - Create repeatable, step-by-step routines.
 - View completion reports and export them as CSV.
-- Export and import household setup, including children, groups, rotations, chores, and routines. Completion history is not imported or overwritten.
+- Export and import household setup, including children, groups, rotations, chores, routines, and vacation dates. Completion history is not imported or overwritten.
 - Keep an audit trail for key household-management actions.
 
 ## License

@@ -1,4 +1,4 @@
-import { databaseDialect, db } from "@/lib/db";
+import { db } from "@/lib/db";
 import { dateInTimezone, dueAt, scheduledDays, type Schedule } from "@/lib/dates";
 import { rotationAssignee, type ChoreGroupRotation } from "@/lib/chore-group-rotation";
 
@@ -84,19 +84,16 @@ export async function materializeChores(until = new Date(Date.now() + 30 * 86_40
 }
 
 export async function markMissed() {
-  if (databaseDialect === "sqlite") {
+  // Bind the household calendar date; SQLite's date('now') is UTC.
+  const households = await db<{ id: string; timezone: string }[]>`SELECT id, timezone FROM households`;
+  for (const household of households) {
+    const today = dateInTimezone(new Date(), household.timezone);
     await db`
       UPDATE chore_obligations SET status = 'missed'
       WHERE status IN ('open', 'rejected') AND occurrence_id IN (
-        SELECT id FROM chore_occurrences WHERE scheduled_for < date('now')
+        SELECT id FROM chore_occurrences WHERE household_id = ${household.id} AND scheduled_for < ${today}
       )`;
-    return;
   }
-  await db`
-    UPDATE chore_obligations o SET status = 'missed'
-    FROM chore_occurrences c, households h
-    WHERE o.occurrence_id = c.id AND h.id = c.household_id AND o.status IN ('open', 'rejected')
-      AND c.scheduled_for < (now() AT TIME ZONE h.timezone)::date`;
 }
 
 export async function materializeRoutines(until = new Date(Date.now() + 30 * 86_400_000)) {

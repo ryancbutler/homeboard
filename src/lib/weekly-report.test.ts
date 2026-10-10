@@ -107,3 +107,32 @@ describe("weekly reports", () => {
     expect(summarizeWeeklyRows(summary.rows, "child-a")).toMatchObject({ completed: 1, missed: 1, open: 0 });
   });
 });
+
+describe("vacation weekly summaries", () => {
+  it("keeps excused rows visible while excluding them from rates and attention", () => {
+    const rows = [
+      {
+        history_date: "2026-10-05",
+        title: "Read",
+        child: "Maya",
+        child_id: "maya",
+        is_shared: false,
+        status: "completed",
+      },
+      {
+        history_date: "2026-10-06",
+        title: "Read",
+        child: "Maya",
+        child_id: "maya",
+        is_shared: false,
+        status: "excused",
+      },
+    ];
+    const summary = summarizeWeeklyRows(rows);
+    expect(summary).toMatchObject({ total: 1, excused: 1, completionRate: 100, missed: 0 });
+    expect(summary.rows).toHaveLength(2);
+    expect(summary.attention).toEqual([]);
+    expect(summary.choreSummaries[0]).toMatchObject({ total: 1, excused: 1 });
+    expect(summarizeWeeklyRows([rows[1]]).completionRate).toBeNull();
+  });
+});

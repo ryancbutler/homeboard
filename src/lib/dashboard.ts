@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { dateInTimezone, sundayOfWeek } from "@/lib/dates";
 import type { DayPart } from "@/lib/day-order";
+import { awayRangeFor, type AwayRange } from "@/lib/member-absence";
+import { loadVacationContext } from "@/lib/member-absence-store";
+import { fromZonedTime } from "date-fns-tz";
 
 export type DashboardData = {
   household: {
@@ -9,7 +12,7 @@ export type DashboardData = {
     timezone: string;
     showBanner: boolean;
   };
-  children: { id: string; name: string; color: string; avatarUrl: string | null }[];
+  children: { id: string; name: string; color: string; avatarUrl: string | null; away: AwayRange | null }[];
   chores: {
     obligationId: string;
     occurrenceId: string;
@@ -39,6 +42,7 @@ export type DashboardData = {
     owner: string | null;
     ownerId: string | null;
     ownerColor: string | null;
+    eligibleChildIds: string[];
     completedSteps: number;
     totalSteps: number;
     steps: { id: string; title: string; icon: string | null; completed: boolean }[];
@@ -83,7 +87,10 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
   if (!household) throw new Error("Household not found");
   const today = dateInTimezone(new Date(), household.timezone);
   const weekEndsOn = sundayOfWeek(today);
-  const [children, choreRows, routineRows] = await Promise.all([
+  const todayStart = fromZonedTime(`${today}T00:00:00`, household.timezone);
+  const todayEnd = fromZonedTime(`${today}T23:59:59.999`, household.timezone);
+  const [vacation, children, choreRows, routineRows] = await Promise.all([
+    loadVacationContext(householdId),
     db<{ id: string; display_name: string; color: string; avatar_url: string | null }[]>`
       SELECT id, display_name, color, avatar_url FROM members
       WHERE household_id = ${householdId} AND role = 'child' AND active = true ORDER BY display_name`,
@@ -128,7 +135,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
           OR (
             o.status = 'completed' AND (
               (ct.is_flexible = false AND co.scheduled_for = ${today})
-              OR (ct.is_flexible = true AND (o.completed_at AT TIME ZONE ${household.timezone})::date = ${today})
+              OR (ct.is_flexible = true AND o.completed_at BETWEEN ${todayStart} AND ${todayEnd})
             )
           )
         )
@@ -164,23 +171,9 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         )
       ORDER BY rt.title, rs.position`,
   ]);
-  const allowedByTemplate = new Map<string, { id: string; name: string; color: string }[]>();
-  const templateIds = [
-    ...new Set(choreRows.filter((row) => row.assignment_policy === "any").map((row) => row.template_id)),
-  ];
-  if (templateIds.length) {
-    const allowed = await db<{ chore_template_id: string; id: string; display_name: string; color: string }[]>`
-      SELECT cta.chore_template_id, m.id, m.display_name, m.color
-      FROM chore_template_assignees cta JOIN members m ON m.id = cta.member_id
-      WHERE cta.chore_template_id = ANY(${templateIds}) ORDER BY m.display_name`;
-    for (const row of allowed) {
-      const values = allowedByTemplate.get(row.chore_template_id) ?? [];
-      values.push({ id: row.id, name: row.display_name, color: row.color });
-      allowedByTemplate.set(row.chore_template_id, values);
-    }
-  }
   const routines = new Map<string, DashboardData["routines"][number]>();
   for (const row of routineRows) {
+    if (vacation.isExcused("routine", row.template_id, row.owner_id, today)) continue;
     const value = routines.get(row.run_id) ?? {
       id: row.run_id,
       title: row.title,
@@ -188,6 +181,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       owner: row.owner,
       ownerId: row.owner_id,
       ownerColor: row.owner_color,
+      eligibleChildIds: vacation.eligibleIds("routine", row.template_id).filter((id) => !vacation.isAway(id, today)),
       completedSteps: 0,
       totalSteps: 0,
       steps: [],
@@ -197,7 +191,12 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
     };
     value.totalSteps += 1;
     if (row.completed) value.completedSteps += 1;
-    value.steps.push({ id: row.step_id, title: row.step_title, icon: row.step_icon, completed: row.completed });
+    value.steps.push({
+      id: row.step_id,
+      title: row.step_title,
+      icon: row.step_icon,
+      completed: Boolean(row.completed),
+    });
     routines.set(row.run_id, value);
   }
   return {
@@ -205,40 +204,70 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
       name: household.name,
       subheading: household.subheading,
       timezone: household.timezone,
-      showBanner: household.show_banner,
+      showBanner: Boolean(household.show_banner),
     },
     children: children.map((child) => ({
       id: child.id,
       name: child.display_name,
       color: child.color,
       avatarUrl: child.avatar_url,
+      away: awayRangeFor(vacation.absences, child.id, today),
     })),
-    chores: choreRows.map((row) => ({
-      obligationId: row.obligation_id,
-      occurrenceId: row.occurrence_id,
-      title: row.title,
-      instructions: row.instructions,
-      icon: row.icon ?? null,
-      scheduledFor: row.scheduled_for,
-      dueAt: row.due_at?.toISOString() ?? null,
-      policy: row.assignment_policy,
-      isFlexible: row.is_flexible,
-      scheduleKind: row.schedule_kind,
-      weekdays: row.weekdays ?? [],
-      status: row.status,
-      approvalStatus: row.approval_status,
-      assignee: row.assignee_id ? { id: row.assignee_id, name: row.assignee_name!, color: row.assignee_color! } : null,
-      allowedChildren: allowedChildrenForChore(
-        row.assignment_policy,
-        allowedByTemplate.get(row.template_id),
-        children.map((child) => ({ id: child.id, name: child.display_name, color: child.color }))
-      ),
-      completedBy: row.completed_by,
-      completedAt: row.completed_at?.toISOString() ?? null,
-      templateId: row.template_id,
-      dayPart: row.day_part,
-      displayOrder: row.display_order,
-    })),
+    chores: choreRows
+      .filter((row) => {
+        const status = vacation.choreStatus(
+          row.template_id,
+          row.assignee_id,
+          row.assignment_policy,
+          row.scheduled_for,
+          row.status
+        );
+        if (status === "excused") return false;
+        // Future work can remain due after return while being paused today.
+        if (["open", "rejected"].includes(status)) {
+          if (row.assignee_id && vacation.isAway(row.assignee_id, today)) return false;
+          if (
+            !row.assignee_id &&
+            row.assignment_policy === "any" &&
+            !vacation.eligibleIds("chore", row.template_id).some((id) => !vacation.isAway(id, today))
+          )
+            return false;
+        }
+        return true;
+      })
+      .map((row) => ({
+        obligationId: row.obligation_id,
+        occurrenceId: row.occurrence_id,
+        title: row.title,
+        instructions: row.instructions,
+        icon: row.icon ?? null,
+        scheduledFor: row.scheduled_for,
+        dueAt: row.due_at?.toISOString() ?? null,
+        policy: row.assignment_policy,
+        isFlexible: Boolean(row.is_flexible),
+        scheduleKind: row.schedule_kind,
+        weekdays: row.weekdays ?? [],
+        status: row.status,
+        approvalStatus: row.approval_status,
+        assignee: row.assignee_id
+          ? { id: row.assignee_id, name: row.assignee_name!, color: row.assignee_color! }
+          : null,
+        allowedChildren: allowedChildrenForChore(
+          row.assignment_policy,
+          children
+            .filter(
+              (child) =>
+                vacation.eligibleIds("chore", row.template_id).includes(child.id) && !vacation.isAway(child.id, today)
+            )
+            .map((child) => ({ id: child.id, name: child.display_name, color: child.color })),
+          children.map((child) => ({ id: child.id, name: child.display_name, color: child.color }))
+        ),
+        completedBy: row.completed_by,
+        completedAt: row.completed_at?.toISOString() ?? null,
+        templateId: row.template_id,
+        dayPart: row.day_part,
+        displayOrder: row.display_order,
+      })),
     routines: [...routines.values()],
     generatedAt: new Date().toISOString(),
   };

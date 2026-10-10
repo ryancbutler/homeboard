@@ -15,6 +15,7 @@ export type WeeklyChoreSummary = {
   open: number;
   pending: number;
   rejected: number;
+  excused: number;
 };
 
 export function mondayFor(day: string): string {
@@ -50,8 +51,10 @@ export function summarizeWeeklyRows(rows: WeeklyReportRow[], child = "all") {
       open: 0,
       pending: 0,
       rejected: 0,
+      excused: 0,
     };
-    summary.total += 1;
+    if (row.status !== "excused") summary.total += 1;
+    if (row.status === "excused") summary.excused += 1;
     if (row.status === "completed") summary.completed += 1;
     if (row.status === "missed") summary.missed += 1;
     if (row.status === "open") summary.open += 1;
@@ -66,6 +69,8 @@ export function summarizeWeeklyRows(rows: WeeklyReportRow[], child = "all") {
   const open = selectedRows.filter((row) => row.status === "open").length;
   const pending = selectedRows.filter((row) => row.status === "pending").length;
   const rejected = selectedRows.filter((row) => row.status === "rejected").length;
+  const excused = selectedRows.filter((row) => row.status === "excused").length;
+  const total = selectedRows.length - excused;
 
   return {
     rows: selectedRows,
@@ -75,7 +80,9 @@ export function summarizeWeeklyRows(rows: WeeklyReportRow[], child = "all") {
     open,
     pending,
     rejected,
-    completionRate: selectedRows.length ? Math.round((completed / selectedRows.length) * 100) : null,
+    excused,
+    total,
+    completionRate: total ? Math.round((completed / total) * 100) : null,
     wins: [...choreSummaries]
       .filter((summary) => summary.completed > 0)
       .sort(

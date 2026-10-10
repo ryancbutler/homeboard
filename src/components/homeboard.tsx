@@ -1,5 +1,6 @@
 "use client";
 
+import { AwayCard } from "@/components/away-card";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -207,7 +208,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
             day: "2-digit",
           }).format(new Date())
         : "",
-    [data?.household.timezone]
+    [data?.household.timezone, data?.generatedAt]
   );
   const isOptionalFlexible = useCallback(
     (chore: DashboardData["chores"][number]) => Boolean(chore.isFlexible && chore.scheduledFor > today),
@@ -223,6 +224,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
   }, []);
   const isFinalRequiredChoreForChild = useCallback(
     (id: string, childId: string) => {
+      if (data?.children.find((child) => child.id === childId)?.away) return false;
       const requiredChores = (data?.chores.filter((chore) => choreBelongsTo(chore, childId)) ?? []).filter(
         (chore) => !isOptionalFlexible(chore)
       );
@@ -250,6 +252,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
         );
         const routines =
           data?.routines.filter((routine) => {
+            if (!routine.eligibleChildIds.includes(child.id)) return false;
             if (routine.ownerId) return routine.ownerId === child.id;
             const hasAssignedVersion = data?.routines.some(
               (other) => other.title === routine.title && other.ownerId === child.id
@@ -286,12 +289,14 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
           );
           const routines =
             data?.routines.filter((routine) => {
+              if (!routine.eligibleChildIds.includes(child.id)) return false;
               if (routine.ownerId) return routine.ownerId === child.id;
               return !data?.routines.some((other) => other.title === routine.title && other.ownerId === child.id);
             }) ?? [];
           return [
             child.id,
-            requiredChores.every((chore) => chore.status === "completed") &&
+            !child.away &&
+              requiredChores.every((chore) => chore.status === "completed") &&
               routines.every((routine) => routine.steps.every((step) => step.completed)),
           ];
         })
@@ -536,68 +541,72 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
 
       {childProgress.length > 0 && (
         <section className="daily-progress" aria-label="Today's progress">
-          {childProgress.map(({ child, actionsLeft, choresDone, choresTotal, pending, routineDone, routineTotal }) => (
-            <article
-              key={child.id}
-              className="child-progress-card"
-              style={{ "--child-color": child.color } as React.CSSProperties}
-            >
-              <header className="child-progress-header">
-                <span className="child-progress-avatar" style={{ backgroundColor: child.color }} aria-hidden="true">
-                  {initials(child.name)}
-                </span>
-                <div>
-                  <h2>{child.name}</h2>
-                  <p>Today’s progress</p>
-                </div>
-                <span className={`child-progress-status ${actionsLeft === 0 ? "all-done" : ""}`}>
-                  {actionsLeft === 0 ? "All clear" : `${actionsLeft} left`}
-                </span>
-              </header>
-              <div className="child-progress-row">
-                <div className="child-progress-label">
-                  <span>Chores</span>
-                  <strong>
-                    {choresTotal ? (
-                      <>
-                        {choresDone} <em>/ {choresTotal} done</em>
-                      </>
-                    ) : (
-                      "None today"
-                    )}
-                  </strong>
-                </div>
-                <progress
-                  className="child-progress-bar"
-                  value={choresDone}
-                  max={Math.max(choresTotal, 1)}
-                  aria-label={`${child.name}: ${choresDone} of ${choresTotal} chores done`}
-                />
-              </div>
-              {routineTotal > 0 && (
+          {childProgress.map(({ child, actionsLeft, choresDone, choresTotal, pending, routineDone, routineTotal }) =>
+            child.away ? (
+              <AwayCard key={child.id} child={child} className="child-progress-card" />
+            ) : (
+              <article
+                key={child.id}
+                className="child-progress-card"
+                style={{ "--child-color": child.color } as React.CSSProperties}
+              >
+                <header className="child-progress-header">
+                  <span className="child-progress-avatar" style={{ backgroundColor: child.color }} aria-hidden="true">
+                    {initials(child.name)}
+                  </span>
+                  <div>
+                    <h2>{child.name}</h2>
+                    <p>Today’s progress</p>
+                  </div>
+                  <span className={`child-progress-status ${actionsLeft === 0 ? "all-done" : ""}`}>
+                    {actionsLeft === 0 ? "All clear" : `${actionsLeft} left`}
+                  </span>
+                </header>
                 <div className="child-progress-row">
                   <div className="child-progress-label">
-                    <span>Routines</span>
+                    <span>Chores</span>
                     <strong>
-                      {routineDone} <em>/ {routineTotal} steps</em>
+                      {choresTotal ? (
+                        <>
+                          {choresDone} <em>/ {choresTotal} done</em>
+                        </>
+                      ) : (
+                        "None today"
+                      )}
                     </strong>
                   </div>
                   <progress
-                    className="child-progress-bar routine-progress-bar"
-                    value={routineDone}
-                    max={routineTotal}
-                    aria-label={`${child.name}: ${routineDone} of ${routineTotal} routine steps done`}
+                    className="child-progress-bar"
+                    value={choresDone}
+                    max={Math.max(choresTotal, 1)}
+                    aria-label={`${child.name}: ${choresDone} of ${choresTotal} chores done`}
                   />
                 </div>
-              )}
-              {pending > 0 && (
-                <p className="child-progress-note">
-                  <Clock3 size={13} aria-hidden="true" />
-                  {pending} sent to a parent for review
-                </p>
-              )}
-            </article>
-          ))}
+                {routineTotal > 0 && (
+                  <div className="child-progress-row">
+                    <div className="child-progress-label">
+                      <span>Routines</span>
+                      <strong>
+                        {routineDone} <em>/ {routineTotal} steps</em>
+                      </strong>
+                    </div>
+                    <progress
+                      className="child-progress-bar routine-progress-bar"
+                      value={routineDone}
+                      max={routineTotal}
+                      aria-label={`${child.name}: ${routineDone} of ${routineTotal} routine steps done`}
+                    />
+                  </div>
+                )}
+                {pending > 0 && (
+                  <p className="child-progress-note">
+                    <Clock3 size={13} aria-hidden="true" />
+                    {pending} sent to a parent for review
+                  </p>
+                )}
+              </article>
+            )
+          )}
           {sharedOpenCount > 0 && (
             <p className="team-progress-note">
               <Users size={15} aria-hidden="true" />
@@ -620,6 +629,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
           </div>
         ) : (
           data.children.map((child) => {
+            if (child.away) return <AwayCard key={child.id} child={child} className="child-column" />;
             const childChores = data.chores.filter((chore) => choreBelongsTo(chore, child.id));
             const activeChores = childChores.filter(
               (chore) => chore.status !== "completed" && !isOptionalFlexible(chore)
@@ -630,6 +640,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
             const completedChores = childChores.filter((c) => c.status === "completed");
 
             const childRoutines = data.routines.filter((routine) => {
+              if (!routine.eligibleChildIds.includes(child.id)) return false;
               if (routine.ownerId) return routine.ownerId === child.id;
               const hasAssigned = data.routines.some((r) => r.title === routine.title && r.ownerId === child.id);
               return !hasAssigned;

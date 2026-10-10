@@ -7,6 +7,8 @@ import { dateInTimezone } from "@/lib/dates";
 import { resolveChoreAssignees } from "@/lib/chore-assignment";
 import { materializeChores, materializeRoutines } from "@/lib/recurrence";
 import { dayPartSchema } from "@/lib/day-order";
+import { absenceDatesSchema } from "@/lib/member-absence";
+import { loadAbsences } from "@/lib/member-absence-store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,14 @@ const routineStepSchema = z.union([
 
 const importSchema = z.object({
   version: z.number().optional(),
+  absences: z
+    .array(
+      z
+        .object({ child: z.string().trim().min(1).max(80), startDate: z.string().date(), endDate: z.string().date() })
+        .refine((range) => range.startDate <= range.endDate, "The last away day must follow the first away day.")
+    )
+    .max(500)
+    .default([]),
   children: z
     .array(
       z.object({
@@ -92,6 +102,7 @@ const importSchema = z.object({
 export async function GET() {
   try {
     const context = await requireContext(true);
+    const absences = await loadAbsences(context.householdId);
 
     const [members, groups, rotations, choreTemplates, routineTemplates] = await Promise.all([
       db<{ id: string; display_name: string; color: string }[]>`
@@ -204,7 +215,11 @@ export async function GET() {
     }
 
     const backup = {
-      version: 4,
+      version: 5,
+      absences: absences.flatMap((range) => {
+        const child = memberMap.get(range.memberId);
+        return child ? [{ child, startDate: range.startDate, endDate: range.endDate }] : [];
+      }),
       exportedAt: new Date().toISOString(),
       children: members.map((m) => ({
         name: m.display_name,
@@ -228,8 +243,8 @@ export async function GET() {
         instructions: c.instructions,
         icon: c.icon,
         assignmentPolicy: c.assignment_policy,
-        approvalRequired: c.approval_required,
-        isFlexible: c.is_flexible,
+        approvalRequired: Boolean(c.approval_required),
+        isFlexible: Boolean(c.is_flexible),
         scheduleKind: c.schedule_kind,
         dueTime: c.due_time,
         weekdays: c.weekdays,
@@ -281,6 +296,7 @@ export async function POST(request: Request) {
     const memberLookup = new Map(existingMembers.map((m) => [m.display_name.trim().toLowerCase(), m.id]));
 
     let importedChildren = 0;
+    let importedAbsences = 0;
     let importedGroups = 0;
     let importedChores = 0;
     let importedRoutines = 0;
@@ -301,6 +317,24 @@ export async function POST(request: Request) {
           memberLookup.set(key, inserted.id);
           importedChildren++;
         }
+      }
+
+      // Restore ranges without replacing history or duplicating existing vacations.
+      for (const range of data.absences) {
+        absenceDatesSchema.parse(range);
+        const memberId = memberLookup.get(range.child.trim().toLowerCase());
+        if (!memberId) throw new Error(`Vacation child "${range.child}" was not found.`);
+        const [existing] = await tx<{ id: string }[]>`SELECT id FROM member_absences
+          WHERE household_id = ${context.householdId} AND member_id = ${memberId}
+          AND start_date = ${range.startDate} AND end_date = ${range.endDate}`;
+        if (existing) continue;
+        const [created] = await tx<
+          { id: string }[]
+        >`INSERT INTO member_absences (household_id, member_id, start_date, end_date)
+          VALUES (${context.householdId}, ${memberId}, ${range.startDate}, ${range.endDate}) RETURNING id`;
+        await tx`INSERT INTO audit_events (household_id, actor_id, action, entity_type, entity_id, detail)
+          VALUES (${context.householdId}, ${context.memberId ?? null}, 'absence.imported', 'member_absence', ${created.id}, ${JSON.stringify(range)})`;
+        importedAbsences++;
       }
 
       // 1. Process groups
@@ -447,6 +481,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       importedChildren,
+      importedAbsences,
       importedGroups,
       importedChores,
       importedRoutines,
