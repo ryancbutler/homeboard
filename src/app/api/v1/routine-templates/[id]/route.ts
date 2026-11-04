@@ -117,9 +117,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         DELETE FROM routine_runs
         WHERE routine_template_id = ${id} AND scheduled_for >= ${today} AND completed_at IS NULL`;
 
-      try {
+      // Retained runs keep their template and steps for history. Check before
+      // deleting: a RESTRICT violation would abort the PostgreSQL transaction.
+      const [retainedRun] = await tx<{ id: string }[]>`
+        SELECT id FROM routine_runs
+        WHERE routine_template_id = ${id}
+        LIMIT 1`;
+
+      if (!retainedRun) {
         await tx`DELETE FROM routine_templates WHERE id = ${id}`;
-      } catch {
+      } else {
         await tx`UPDATE routine_templates SET active = false WHERE id = ${id}`;
       }
     });
