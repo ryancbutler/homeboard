@@ -1,6 +1,6 @@
 {
   "name": "home-organizer",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "private": true,
   "type": "module",
   "packageManager": "npm@12.2.0",
