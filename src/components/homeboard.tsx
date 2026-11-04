@@ -118,6 +118,9 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
   const [chooser, setChooser] = useState<Chooser | null>(null);
   const [collapsedCompleted, setCollapsedCompleted] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [savingRoutineSteps, setSavingRoutineSteps] = useState<Record<string, boolean>>({});
+  const pendingRoutineSteps = useRef(new Set<string>());
+  const routineRevision = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const praiseByChild = useRef<Record<string, string>>({});
@@ -158,15 +161,20 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (pendingRoutineSteps.current.size) return;
+    const revision = routineRevision.current;
     setRefreshing(true);
     try {
       const response = await fetch("/api/v1/dashboard", { cache: "no-store" });
       if (!response.ok) throw new Error("Your board couldn't connect. Please try again.");
       const next = (await response.json()) as DashboardData;
+      // A snapshot requested before a tap must not undo its optimistic update.
+      if (revision !== routineRevision.current) return;
       setData(next);
       setOffline(response.headers.get("X-Homeboard-Offline") === "true");
       setError(null);
     } catch (cause) {
+      if (revision !== routineRevision.current) return;
       setOffline(true);
       setError(cause instanceof Error ? cause.message : "Unable to refresh the household dashboard.");
     } finally {
@@ -374,20 +382,32 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
   };
 
   const toggleStep = async (runId: string, stepId: string, actorId: string | undefined, completed: boolean) => {
-    if (busy || offline) return;
-    setBusy(stepId);
+    const key = `${runId}:${stepId}`;
+    if (busy || offline || pendingRoutineSteps.current.has(key)) return;
+    const previous = data?.routines.find((routine) => routine.id === runId)?.steps.find((step) => step.id === stepId);
+    if (!previous) return;
+    pendingRoutineSteps.current.add(key);
+    routineRevision.current += 1;
+    setSavingRoutineSteps((current) => ({ ...current, [key]: true }));
+    updateRoutineStep(runId, stepId, completed);
+    setChooser(null);
     try {
       await api(`/api/v1/routine-runs/${runId}/steps/${stepId}`, {
         method: "POST",
         body: JSON.stringify({ actorId: actorId || undefined, completed }),
       });
-      updateRoutineStep(runId, stepId, completed);
-      setChooser(null);
-      void refresh();
     } catch (cause) {
+      updateRoutineStep(runId, stepId, previous.completed);
       setNotice({ title: "Couldn't update routine", detail: cause instanceof Error ? cause.message : undefined });
     } finally {
-      setBusy(null);
+      pendingRoutineSteps.current.delete(key);
+      routineRevision.current += 1;
+      setSavingRoutineSteps((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      void refresh();
     }
   };
 
@@ -406,6 +426,10 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
         )}
       </main>
     );
+
+  let connectionStatus = "All synced";
+  if (Object.keys(savingRoutineSteps).length) connectionStatus = "Saving…";
+  if (offline) connectionStatus = "Offline";
 
   return (
     <main className="board" id="main">
@@ -439,7 +463,7 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
         <div className="header-actions">
           <span className="connection">
             <i className={offline ? "offline" : ""} />
-            {offline ? "Offline" : "All synced"}
+            {connectionStatus}
           </span>
           <a href="/parent" className="parent-link">
             <Settings2 size={13} aria-hidden="true" />
@@ -738,14 +762,16 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                                     type="button"
                                     className={`task-checkbox-btn ${step.completed ? "checked" : ""}`}
                                     aria-label={step.completed ? `Uncheck ${step.title}` : `Complete ${step.title}`}
-                                    disabled={offline || Boolean(busy)}
+                                    aria-pressed={step.completed}
+                                    aria-busy={Boolean(savingRoutineSteps[`${task.item.id}:${step.id}`])}
+                                    disabled={
+                                      offline ||
+                                      Boolean(busy) ||
+                                      Boolean(savingRoutineSteps[`${task.item.id}:${step.id}`])
+                                    }
                                     onClick={() => void toggleStep(task.item.id, step.id, child.id, !step.completed)}
                                   >
-                                    {step.completed ? (
-                                      <Check size={16} strokeWidth={3} aria-hidden="true" />
-                                    ) : busy === step.id ? (
-                                      <RefreshCw size={13} className="spinning" aria-hidden="true" />
-                                    ) : null}
+                                    {step.completed ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
                                   </button>
                                 </div>
                               ))}
