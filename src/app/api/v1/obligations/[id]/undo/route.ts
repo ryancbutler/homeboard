@@ -29,10 +29,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return { status: obligation.status };
       }
 
-      if (context.role !== "parent" && obligation.status === "pending") {
-        throw new Error("Forbidden");
-      }
-
       const [updated] = await tx<{ status: string }[]>`
         UPDATE chore_obligations
         SET status = 'open',

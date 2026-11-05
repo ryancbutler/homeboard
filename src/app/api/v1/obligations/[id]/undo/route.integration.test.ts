@@ -77,13 +77,17 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
     await db.end();
   });
 
-  it("blocks child undo while awaiting parent approval", async () => {
+  it("lets a child undo an accidental selection while awaiting parent approval", async () => {
     expect((await call(complete, { actorId: child })).status).toBe(200);
-    const before = await state();
-    expect(before.status).toBe("pending");
-    expect((await call(undo)).status).toBe(403);
-    expect(await state()).toEqual(before);
-    expect(await db`SELECT id FROM audit_events WHERE action = 'chore.undone'`).toHaveLength(0);
+    expect((await state()).status).toBe("pending");
+    expect((await call(undo)).status).toBe(200);
+    expect(await state()).toMatchObject({
+      status: "open",
+      approval_status: "not_required",
+      completed_by: null,
+      completed_at: null,
+    });
+    expect(await db`SELECT id FROM audit_events WHERE action = 'chore.undone'`).toHaveLength(1);
   });
 
   it("lets a child undo an approved chore and submit it for approval again", async () => {
@@ -104,7 +108,8 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
 
     expect((await call(complete, { actorId: child })).status).toBe(200);
     expect(await state()).toMatchObject({ status: "pending", approval_status: "pending", completed_by: child });
-    expect((await call(undo)).status).toBe(403);
+    expect((await call(undo)).status).toBe(200);
+    expect((await state()).status).toBe("open");
   });
 
   it.each([false, true])("allows parents to undo approval chores (reviewed: %s)", async (reviewed) => {
@@ -123,11 +128,11 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
     expect(await state()).toMatchObject({ status: "open", approval_status: "not_required", completed_by: null });
   });
 
-  it("keeps pending submissions locked if the template approval setting changes", async () => {
+  it("lets a child undo a pending submission after the template approval setting changes", async () => {
     await call(complete, { actorId: child });
     await db`UPDATE chore_templates SET approval_required = false WHERE id = ${template}`;
-    expect((await call(undo)).status).toBe(403);
-    expect((await state()).status).toBe("pending");
+    expect((await call(undo)).status).toBe(200);
+    expect((await state()).status).toBe("open");
   });
 
   it("rejects undo from another household", async () => {
