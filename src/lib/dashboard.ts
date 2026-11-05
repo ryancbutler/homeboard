@@ -27,6 +27,7 @@ export type DashboardData = {
     weekdays: number[];
     status: string;
     approvalStatus: string;
+    approvalRequired: boolean;
     assignee: { id: string; name: string; color: string } | null;
     allowedChildren: { id: string; name: string; color: string }[];
     completedBy: string | null;
@@ -108,6 +109,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         weekdays: number[];
         status: string;
         approval_status: string;
+        approval_required: boolean;
         assignee_id: string | null;
         assignee_name: string | null;
         assignee_color: string | null;
@@ -121,7 +123,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
     >`
       SELECT o.id AS obligation_id, co.id AS occurrence_id, ct.id AS template_id, ct.title, ct.instructions, ct.icon, ct.day_part, ct.display_order, co.scheduled_for,
         co.due_at, ct.assignment_policy, ct.is_flexible, ct.schedule_kind, COALESCE(ct.weekdays, '{}') AS weekdays,
-        o.status, o.approval_status, o.member_id AS assignee_id,
+        o.status, o.approval_status, ct.approval_required, o.member_id AS assignee_id,
         m.display_name AS assignee_name, m.color AS assignee_color, o.completed_by, o.completed_at
       FROM chore_obligations o
       JOIN chore_occurrences co ON co.id = o.occurrence_id
@@ -249,6 +251,7 @@ export async function dashboardFor(householdId: string): Promise<DashboardData> 
         weekdays: row.weekdays ?? [],
         status: row.status,
         approvalStatus: row.approval_status,
+        approvalRequired: Boolean(row.approval_required),
         assignee: row.assignee_id
           ? { id: row.assignee_id, name: row.assignee_name!, color: row.assignee_color! }
           : null,

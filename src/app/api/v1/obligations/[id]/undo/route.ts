@@ -9,13 +9,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
 
     const result = await db.begin(async (tx) => {
-      const rows = await tx<{
-        household_id: string;
-        status: string;
-      }[]>`
-        SELECT co.household_id, o.status
+      const rows = await tx<
+        {
+          household_id: string;
+          status: string;
+          approval_required: boolean;
+        }[]
+      >`
+        SELECT co.household_id, o.status, ct.approval_required
         FROM chore_obligations o
         JOIN chore_occurrences co ON co.id = o.occurrence_id
+        JOIN chore_templates ct ON ct.id = co.chore_template_id
         WHERE o.id = ${id} FOR UPDATE`;
 
       const obligation = rows[0];
@@ -25,6 +29,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       if (!["completed", "pending"].includes(obligation.status)) {
         return { status: obligation.status };
+      }
+
+      if (context.role !== "parent" && (obligation.status === "pending" || obligation.approval_required)) {
+        throw new Error("Forbidden");
       }
 
       const [updated] = await tx<{ status: string }[]>`

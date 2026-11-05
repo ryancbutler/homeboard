@@ -43,7 +43,7 @@ function deferredResponse() {
   return { promise, resolve, reject };
 }
 
-describe("routine checkmarks", () => {
+describe("homeboard task actions", () => {
   let root: Root;
   let container: HTMLDivElement;
   let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
@@ -76,6 +76,70 @@ describe("routine checkmarks", () => {
   const click = async (element: HTMLButtonElement) => {
     await act(async () => element.click());
   };
+
+  const choreDashboard = (approvalRequired: boolean, status = "open") => {
+    const data = dashboard();
+    data.chores.push({
+      obligationId: "chore",
+      occurrenceId: "occurrence",
+      title: "Tidy room",
+      instructions: null,
+      icon: null,
+      scheduledFor: "2026-11-04",
+      dueAt: null,
+      policy: "individual",
+      isFlexible: false,
+      scheduleKind: "daily",
+      weekdays: [],
+      status,
+      approvalStatus: status === "pending" ? "pending" : "approved",
+      approvalRequired,
+      assignee: { id: "child", name: "Alex", color: "#123456" },
+      allowedChildren: [],
+      completedBy: status === "open" ? null : "child",
+      completedAt: null,
+      templateId: "chore-template",
+      dayPart: "morning",
+      displayOrder: 0,
+    });
+    return data;
+  };
+
+  it.each([false, true])(
+    "offers toast undo only without parent approval (approval required: %s)",
+    async (approvalRequired) => {
+      const status = approvalRequired ? "pending" : "completed";
+      fetchMock.mockImplementation(async (path) =>
+        path === "/api/v1/dashboard"
+          ? Response.json(choreDashboard(approvalRequired, status))
+          : Response.json({ status, approval_status: approvalRequired ? "pending" : "approved" })
+      );
+      await render(choreDashboard(approvalRequired));
+      await click(button("Mark Tidy room done"));
+
+      expect(container.querySelector(".toast-undo") !== null).toBe(!approvalRequired);
+      if (approvalRequired) {
+        expect(container.textContent).toContain("Sent for parent approval");
+        expect(container.textContent).toContain("Awaiting approval");
+        expect(container.querySelector(".task-pending button")).toBeNull();
+      }
+      expect(fetchMock).toHaveBeenCalledWith("/api/v1/obligations/chore/complete", expect.anything());
+    }
+  );
+
+  it.each([false, true])(
+    "offers completed-drawer undo only without approval (approval required: %s)",
+    async (approvalRequired) => {
+      await render(choreDashboard(approvalRequired, "completed"));
+      const drawer = container.querySelector<HTMLButtonElement>(".completed-drawer-header");
+      if (!drawer) throw new Error("Missing completed chores drawer");
+      expect(container.querySelector(".task-undo-link") !== null).toBe(!approvalRequired);
+      await click(drawer);
+      await click(drawer);
+      expect(container.querySelector(".task-undo-link") !== null).toBe(!approvalRequired);
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
 
   it("checks the step and updates progress before a slow save finishes", async () => {
     const save = deferredResponse();

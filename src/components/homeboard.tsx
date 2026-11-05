@@ -349,7 +349,10 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
       if (status === "completed" && isFinalRequiredChoreForChild(id, childId)) celebrateChild(childId);
       setNotice({
         title: status === "pending" ? "Nice work! Sent for parent approval." : "One less chore. One more little win!",
-        undoChoreId: id,
+        undoChoreId:
+          status === "completed" && !data?.chores.find((chore) => chore.obligationId === id)?.approvalRequired
+            ? id
+            : undefined,
         undoChoreTitle: choreTitle,
       });
       setChooser(null);
@@ -363,6 +366,8 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
 
   const undoChore = async (choreId: string) => {
     if (busy || offline) return;
+    const chore = data?.chores.find((item) => item.obligationId === choreId);
+    if (!chore || chore.status !== "completed" || chore.approvalRequired) return;
     setBusy(choreId);
     try {
       const result = await api<{ status?: string }>(`/api/v1/obligations/${choreId}/undo`, { method: "POST" });
@@ -929,15 +934,17 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                             <div className="task-card-content">
                               <span className="task-title-text strikethrough">{chore.title}</span>
                             </div>
-                            <button
-                              type="button"
-                              className="task-undo-link"
-                              title={`Undo "${chore.title}"`}
-                              disabled={offline || Boolean(busy)}
-                              onClick={() => undoChore(chore.obligationId)}
-                            >
-                              <RotateCcw size={12} aria-hidden="true" /> Undo
-                            </button>
+                            {!chore.approvalRequired && (
+                              <button
+                                type="button"
+                                className="task-undo-link"
+                                title={`Undo "${chore.title}"`}
+                                disabled={offline || Boolean(busy)}
+                                onClick={() => undoChore(chore.obligationId)}
+                              >
+                                <RotateCcw size={12} aria-hidden="true" /> Undo
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
