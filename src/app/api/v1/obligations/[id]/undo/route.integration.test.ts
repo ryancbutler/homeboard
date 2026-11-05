@@ -20,7 +20,6 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { db, databaseDialect } from "@/lib/db";
-import { dashboardFor } from "@/lib/dashboard";
 import { POST as complete } from "../complete/route";
 import { POST as review } from "../review/route";
 import { POST as undo } from "./route";
@@ -78,19 +77,34 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
     await db.end();
   });
 
-  it.each([false, true])("blocks child undo before and after parent approval (reviewed: %s)", async (reviewed) => {
+  it("blocks child undo while awaiting parent approval", async () => {
     expect((await call(complete, { actorId: child })).status).toBe(200);
-    if (reviewed) {
-      access.role = "parent";
-      expect((await call(review, { decision: "approve" })).status).toBe(200);
-      access.role = "device";
-    }
     const before = await state();
-    expect(before.status).toBe(reviewed ? "completed" : "pending");
-    expect((await dashboardFor(home)).chores[0].approvalRequired).toBe(true);
+    expect(before.status).toBe("pending");
     expect((await call(undo)).status).toBe(403);
     expect(await state()).toEqual(before);
     expect(await db`SELECT id FROM audit_events WHERE action = 'chore.undone'`).toHaveLength(0);
+  });
+
+  it("lets a child undo an approved chore and submit it for approval again", async () => {
+    expect((await call(complete, { actorId: child })).status).toBe(200);
+    access.role = "parent";
+    expect((await call(review, { decision: "approve" })).status).toBe(200);
+    expect((await state()).status).toBe("completed");
+
+    access.role = "device";
+    expect((await call(undo)).status).toBe(200);
+    expect(await state()).toMatchObject({
+      status: "open",
+      approval_status: "not_required",
+      completed_by: null,
+      completed_at: null,
+    });
+    expect(await db`SELECT id FROM audit_events WHERE action = 'chore.undone'`).toHaveLength(1);
+
+    expect((await call(complete, { actorId: child })).status).toBe(200);
+    expect(await state()).toMatchObject({ status: "pending", approval_status: "pending", completed_by: child });
+    expect((await call(undo)).status).toBe(403);
   });
 
   it.each([false, true])("allows parents to undo approval chores (reviewed: %s)", async (reviewed) => {
@@ -105,7 +119,6 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
   it("preserves child undo for chores without approval", async () => {
     await db`UPDATE chore_templates SET approval_required = false WHERE id = ${template}`;
     await call(complete, { actorId: child });
-    expect((await dashboardFor(home)).chores[0].approvalRequired).toBe(false);
     expect((await call(undo)).status).toBe(200);
     expect(await state()).toMatchObject({ status: "open", approval_status: "not_required", completed_by: null });
   });

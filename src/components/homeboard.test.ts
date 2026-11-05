@@ -77,8 +77,9 @@ describe("homeboard task actions", () => {
     await act(async () => element.click());
   };
 
-  const choreDashboard = (approvalRequired: boolean, status = "open") => {
+  const choreDashboard = (status = "open") => {
     const data = dashboard();
+    const approvalStatuses: Record<string, string> = { pending: "pending", completed: "approved" };
     data.chores.push({
       obligationId: "chore",
       occurrenceId: "occurrence",
@@ -92,8 +93,7 @@ describe("homeboard task actions", () => {
       scheduleKind: "daily",
       weekdays: [],
       status,
-      approvalStatus: status === "pending" ? "pending" : "approved",
-      approvalRequired,
+      approvalStatus: approvalStatuses[status] ?? "not_required",
       assignee: { id: "child", name: "Alex", color: "#123456" },
       allowedChildren: [],
       completedBy: status === "open" ? null : "child",
@@ -111,10 +111,10 @@ describe("homeboard task actions", () => {
       const status = approvalRequired ? "pending" : "completed";
       fetchMock.mockImplementation(async (path) =>
         path === "/api/v1/dashboard"
-          ? Response.json(choreDashboard(approvalRequired, status))
+          ? Response.json(choreDashboard(status))
           : Response.json({ status, approval_status: approvalRequired ? "pending" : "approved" })
       );
-      await render(choreDashboard(approvalRequired));
+      await render(choreDashboard());
       await click(button("Mark Tidy room done"));
 
       expect(container.querySelector(".toast-undo") !== null).toBe(!approvalRequired);
@@ -127,19 +127,28 @@ describe("homeboard task actions", () => {
     }
   );
 
-  it.each([false, true])(
-    "offers completed-drawer undo only without approval (approval required: %s)",
-    async (approvalRequired) => {
-      await render(choreDashboard(approvalRequired, "completed"));
-      const drawer = container.querySelector<HTMLButtonElement>(".completed-drawer-header");
-      if (!drawer) throw new Error("Missing completed chores drawer");
-      expect(container.querySelector(".task-undo-link") !== null).toBe(!approvalRequired);
-      await click(drawer);
-      await click(drawer);
-      expect(container.querySelector(".task-undo-link") !== null).toBe(!approvalRequired);
-      expect(fetchMock).not.toHaveBeenCalled();
-    }
-  );
+  it("lets children undo a parent-approved chore from the completed drawer", async () => {
+    const approved = choreDashboard("completed");
+    approved.chores[0].approvalStatus = "approved";
+    fetchMock.mockImplementation(async (path) =>
+      path === "/api/v1/dashboard" ? Response.json(choreDashboard()) : Response.json({ status: "open" })
+    );
+    await render(approved);
+    const drawer = container.querySelector<HTMLButtonElement>(".completed-drawer-header");
+    if (!drawer) throw new Error("Missing completed chores drawer");
+    await click(drawer);
+    await click(drawer);
+    const undo = container.querySelector<HTMLButtonElement>(".task-undo-link");
+    if (!undo) throw new Error("Missing approved chore undo button");
+    await click(undo);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/obligations/chore/undo",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(button("Mark Tidy room done")).not.toBeNull();
+    expect(container.textContent).toContain("Chore restored back to your list!");
+  });
 
   it("checks the step and updates progress before a slow save finishes", async () => {
     const save = deferredResponse();

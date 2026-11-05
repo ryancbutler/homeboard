@@ -13,13 +13,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         {
           household_id: string;
           status: string;
-          approval_required: boolean;
         }[]
       >`
-        SELECT co.household_id, o.status, ct.approval_required
+        SELECT co.household_id, o.status
         FROM chore_obligations o
         JOIN chore_occurrences co ON co.id = o.occurrence_id
-        JOIN chore_templates ct ON ct.id = co.chore_template_id
         WHERE o.id = ${id} FOR UPDATE`;
 
       const obligation = rows[0];
@@ -31,7 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return { status: obligation.status };
       }
 
-      if (context.role !== "parent" && (obligation.status === "pending" || obligation.approval_required)) {
+      if (context.role !== "parent" && obligation.status === "pending") {
         throw new Error("Forbidden");
       }
 
