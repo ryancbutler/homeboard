@@ -363,6 +363,8 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
 
   const undoChore = async (choreId: string) => {
     if (busy || offline) return;
+    const chore = data?.chores.find((item) => item.obligationId === choreId);
+    if (!chore || !["completed", "pending"].includes(chore.status)) return;
     setBusy(choreId);
     try {
       const result = await api<{ status?: string }>(`/api/v1/obligations/${choreId}/undo`, { method: "POST" });
@@ -806,9 +808,17 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                               </div>
                             </div>
                             {task.item.status === "pending" ? (
-                              <span className="task-checkbox-btn pending" title="Awaiting parent approval">
+                              <button
+                                type="button"
+                                className="task-checkbox-btn pending"
+                                aria-label={`Uncheck ${task.item.title}`}
+                                aria-pressed={true}
+                                title="Awaiting parent approval. Uncheck this chore."
+                                disabled={offline || Boolean(busy)}
+                                onClick={() => void undoChore(task.item.obligationId)}
+                              >
                                 <Clock3 size={15} aria-hidden="true" />
-                              </span>
+                              </button>
                             ) : (
                               <button
                                 type="button"
@@ -874,9 +884,17 @@ export function Homeboard({ initialData }: { initialData: DashboardData }) {
                             </div>
                           </div>
                           {chore.status === "pending" ? (
-                            <span className="task-checkbox-btn pending" title="Awaiting parent approval">
+                            <button
+                              type="button"
+                              className="task-checkbox-btn pending"
+                              aria-label={`Uncheck ${chore.title}`}
+                              aria-pressed={true}
+                              title="Awaiting parent approval. Uncheck this chore."
+                              disabled={offline || Boolean(busy)}
+                              onClick={() => void undoChore(chore.obligationId)}
+                            >
                               <Clock3 size={15} aria-hidden="true" />
-                            </span>
+                            </button>
                           ) : (
                             <button
                               type="button"

@@ -9,10 +9,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
 
     const result = await db.begin(async (tx) => {
-      const rows = await tx<{
-        household_id: string;
-        status: string;
-      }[]>`
+      const rows = await tx<
+        {
+          household_id: string;
+          status: string;
+        }[]
+      >`
         SELECT co.household_id, o.status
         FROM chore_obligations o
         JOIN chore_occurrences co ON co.id = o.occurrence_id

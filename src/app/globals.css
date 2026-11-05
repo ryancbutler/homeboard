@@ -3859,7 +3859,6 @@ input[type="file"]::file-selector-button:hover {
   border-color: #e5cd8d;
   background: #fff8e3;
   color: #a47625;
-  cursor: default;
 }
 .column-all-clear {
   text-align: center;
