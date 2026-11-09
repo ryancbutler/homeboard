@@ -258,4 +258,4 @@ standalone connector, `helm/homelab/cloudflared-secret-ref.json` changes its
 reference after checking the current Secret name. Retain `homeboard-secrets`
 for rollback.
 
-Homeboard uses the Vault-managed PostgreSQL login through `homeboard-db-rotating`. Stage `helm/homelab/postgres-rotation.yaml` and wait for VSO sync before using the homelab values. Vault rotates on the 19th of each month at 09:00 UTC and VSO rolls the web and worker Deployments. To roll back, set `secrets.databaseUrlSecret` to an empty string to use the original runtime Secret.
+Homeboard uses the Vault-managed PostgreSQL login through `homeboard-db-rotating`. Stage `helm/homelab/postgres-rotation.yaml` and wait for VSO sync before using the homelab values. Vault rotates every 30 days and VSO rolls the web and worker Deployments. To roll back, set `secrets.databaseUrlSecret` to an empty string to use the original runtime Secret.
