@@ -1,2 +1,3 @@
 secrets:
   existingSecret: homeboard-secrets-vault
+  databaseUrlSecret: homeboard-db-rotating

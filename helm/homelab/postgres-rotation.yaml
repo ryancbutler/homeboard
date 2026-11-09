@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: homeboard-db-rotation
+  namespace: homeboard
+automountServiceAccountToken: false
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: homeboard-db-rotation
+  namespace: homeboard
+spec:
+  address: https://vault-vso.vault.svc.cluster.local:8443
+  tlsServerName: vault-vso.techdrabble.com
+  skipTLSVerify: false
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: homeboard-db-rotation
+  namespace: homeboard
+spec:
+  vaultConnectionRef: homeboard-db-rotation
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: homeboard-db-rotation
+    serviceAccount: homeboard-db-rotation
+    audiences:
+    - vault
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: homeboard-db-rotation
+  namespace: homeboard
+spec:
+  vaultAuthRef: homeboard-db-rotation
+  mount: database-homeboard
+  path: static-creds/homeboard
+  allowStaticCreds: true
+  rolloutRestartTargets:
+  - kind: Deployment
+    name: homeboard-homeboard
+  - kind: Deployment
+    name: homeboard-homeboard-worker
+  destination:
+    name: homeboard-db-rotating
+    create: true
+    transformation:
+      excludeRaw: true
+      excludes:
+      - .*
+      templates:
+        DATABASE_URL:
+          text: '{{ printf "postgres://%s:%s@192.168.1.201:2665/homeboard" (urlquery (get .Secrets "username")) (urlquery (get .Secrets "password")) }}'
