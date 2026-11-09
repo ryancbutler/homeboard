@@ -242,3 +242,18 @@ src/components/      Client components
 src/lib/             Database, authentication, scheduling, and domain logic
 src/worker.ts        Recurrence and overdue-status worker
 ```
+
+### Homelab Vault credentials
+
+The homelab uses VSO to sync `kv/apps/homeboard/runtime` into
+`homeboard/homeboard-secrets-vault`. The Secret supplies `DATABASE_URL`,
+`SESSION_SECRET`, and the standalone Cloudflare connector's `TUNNEL_TOKEN`.
+The Vault role `homeboard-runtime-vso` is bound to the matching ServiceAccount
+in `homeboard` and can read only that KV path.
+
+Stage `helm/homelab/vault-secrets.yaml` and verify the new Secret before
+upgrading the release with `helm/homelab/vault-values.yaml`. Future upgrades
+using `--reuse-values` keep the production Secret reference. For the
+standalone connector, `helm/homelab/cloudflared-secret-ref.json` changes its
+reference after checking the current Secret name. Retain `homeboard-secrets`
+for rollback.
