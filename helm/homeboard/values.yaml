@@ -22,6 +22,8 @@ config:
   allowDemo: false
 secrets:
   existingSecret: homeboard-secrets
+  # Optional separate Secret for DATABASE_URL. Defaults to existingSecret.
+  databaseUrlSecret: ""
   # Set this to an existing secret key to keep the current PostgreSQL setup.
   databaseUrlKey: ""
   sessionSecretKey: SESSION_SECRET
