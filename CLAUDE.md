@@ -5,7 +5,7 @@ strictly typed, and safe for self-hosted deployments.
 
 ## Local development
 
-- Use Node.js 24.21.x and npm 12.x.
+- Use the Node.js version in `.nvmrc` and the npm version in `package.json`.
 - Run `npm ci`, copy `.env.example` to `.env.local`, and provide local values
   for `DATABASE_URL` and `SESSION_SECRET`.
 - Apply migrations with `npm run db:migrate`; run `npm run dev` and

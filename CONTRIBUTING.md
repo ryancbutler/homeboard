@@ -5,7 +5,7 @@ safe to deploy for self-hosted households.
 
 ## Development setup
 
-Use Node.js 24.21.x and npm 12.x. Install dependencies with `npm ci`, copy
+Use the Node.js version in `.nvmrc` and the npm version in `package.json`. Install dependencies with `npm ci`, copy
 `.env.example` to `.env.local`, set `DATABASE_URL`, and apply migrations:
 
 ```bash
