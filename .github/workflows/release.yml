@@ -119,8 +119,15 @@ jobs:
                 repo: context.repo.repo,
                 tag,
               });
-              core.info(`Release ${tag} already exists; skipping.`);
-              core.setOutput('created', 'false');
+              const ref = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`,
+              });
+              if (ref.data.object.sha !== context.sha) {
+                core.info(`Release ${tag} belongs to another commit; skipping image publication.`);
+                return;
+              }
             } catch (error) {
               if (error.status !== 404) throw error;
 
@@ -134,11 +141,9 @@ jobs:
               });
 
               core.info(`Created release: ${release.data.html_url}`);
-              core.setOutput('created', 'true');
             }
 
-            // Always publish on a run. This makes the workflow recoverable if
-            // a prior run created the release but failed while pushing images.
+            // Allow a failed image publication to be retried from the tagged commit.
             core.setOutput('publish', 'true');
 
       - name: Log in to Docker Hub
