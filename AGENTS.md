@@ -8,7 +8,7 @@ Keep ordered SQL migrations in `db/migrations/`. The scheduler is `src/worker.ts
 
 ## Build, Test, and Development Commands
 
-Use Node `24.21.x` and npm `12.x` (see `.nvmrc` and `package.json`).
+Use the Node version in `.nvmrc` and the npm version in `package.json`.
 
 - `npm ci` installs the locked dependency set.
 - `npm run dev` starts the web app; run `npm run worker` separately for recurrence processing.

@@ -39,7 +39,7 @@ graph TD
 
 ### Prerequisites
 
-- Node.js 24.21.x and npm 12.x (see `.nvmrc` and `package.json`)
+- Node.js and npm versions specified in `.nvmrc` and `package.json`
 - PostgreSQL 16 or SQLite (Docker Compose can provide either option)
 
 Install the locked dependency set and configure the database:
