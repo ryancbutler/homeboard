@@ -3,7 +3,7 @@
   "version": "1.0.18",
   "private": true,
   "type": "module",
-  "packageManager": "npm@12.2.2",
+  "packageManager": "npm@12.2.3",
   "engines": {
     "node": "26.13.x",
     "npm": "12.2.x"
