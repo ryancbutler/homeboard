@@ -219,6 +219,12 @@ function useParentController() {
     });
   };
 
+  const markMissedChoreComplete = (row: ReportRow) =>
+    void perform(`override-missed-${row.obligation_id}`, async () => {
+      await request(`/api/v1/obligations/${row.obligation_id}/override-missed`, { method: "POST" });
+      setNotice(`Chore "${row.title}" marked complete.`);
+    });
+
   const openReschedule = (row: ReportRow) => {
     setRescheduleDialog({
       kind: "reschedule",
@@ -465,6 +471,7 @@ function useParentController() {
     deleteChild,
     review,
     undoChore,
+    markMissedChoreComplete,
     openReschedule,
     openPostpone,
     confirmReschedule,
