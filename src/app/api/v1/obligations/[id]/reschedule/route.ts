@@ -51,7 +51,10 @@ function assertEligible(obligation: RescheduleContext, householdId: string) {
 
 function labelFor(day: string) {
   return new Intl.DateTimeFormat("en-US", {
-    weekday: "short", month: "short", day: "numeric", timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
   }).format(new Date(`${day}T12:00:00.000Z`));
 }
 
@@ -64,11 +67,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     assertEligible(obligation, context.householdId);
 
     const today = dateInTimezone(new Date(), obligation.timezone);
-    const scheduled = new Set((await db<{ scheduled_for: string }[]>`
+    const scheduled = new Set(
+      (
+        await db<{ scheduled_for: string }[]>`
       SELECT scheduled_for FROM chore_occurrences
       WHERE household_id = ${context.householdId} AND chore_template_id = ${obligation.template_id}
-        AND scheduled_for BETWEEN ${daysMondayToSunday(today)[0]} AND ${sundayOfWeek(today)}`)
-      .map((row) => row.scheduled_for));
+        AND scheduled_for BETWEEN ${daysMondayToSunday(today)[0]} AND ${sundayOfWeek(today)}`
+      ).map((row) => row.scheduled_for)
+    );
 
     return NextResponse.json({
       title: obligation.title,
@@ -85,7 +91,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         };
       }),
     });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -95,6 +103,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { scheduledFor } = bodySchema.parse(await request.json());
 
     const result = await db.begin(async (tx) => {
+      // Serialize rescheduling and overriding the same missed obligation.
+      await tx`SELECT id FROM chore_obligations WHERE id = ${id} AND occurrence_id IN (
+        SELECT id FROM chore_occurrences WHERE household_id = ${context.householdId}
+      ) FOR UPDATE`;
       const obligation = await contextFor(tx, id);
       if (!obligation) throw new Error("Chore not found.");
       assertEligible(obligation, context.householdId);
@@ -126,5 +138,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return { obligationId: rescheduled.id, scheduledFor };
     });
     return NextResponse.json(result, { status: 201 });
-  } catch (error) { return apiError(error); }
+  } catch (error) {
+    return apiError(error);
+  }
 }

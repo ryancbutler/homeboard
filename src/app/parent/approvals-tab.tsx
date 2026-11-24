@@ -26,6 +26,7 @@ export function ApprovalsTab() {
     perform,
     review,
     undoChore,
+    markMissedChoreComplete,
     openReschedule,
     openPostpone,
     report,
@@ -111,7 +112,7 @@ export function ApprovalsTab() {
           <div>
             <p className="eyebrow">THE LITTLE WINS ADD UP</p>
             <h2>Chore history</h2>
-            <p>Filter, sort, undo, or reschedule a missed chore below.</p>
+            <p>Review chore history, correct missed chores, or reschedule them.</p>
           </div>
           <a className="csv" href="/api/v1/reports?format=csv">
             <Download size={16} aria-hidden="true" />
@@ -261,15 +262,26 @@ export function ApprovalsTab() {
                           </button>
                         )}
                       {row.obligation_id && row.status === "missed" && !row.rescheduled_for && (
-                        <button
-                          type="button"
-                          className="history-reschedule-button"
-                          disabled={Boolean(busy)}
-                          onClick={() => openReschedule(row)}
-                        >
-                          <RefreshCw size={13} aria-hidden="true" />
-                          Reschedule
-                        </button>
+                        <div className="history-row-actions">
+                          <button
+                            type="button"
+                            className="history-complete-button"
+                            disabled={Boolean(busy)}
+                            onClick={() => markMissedChoreComplete(row)}
+                          >
+                            <Check size={13} aria-hidden="true" />
+                            Mark complete
+                          </button>
+                          <button
+                            type="button"
+                            className="history-reschedule-button"
+                            disabled={Boolean(busy)}
+                            onClick={() => openReschedule(row)}
+                          >
+                            <RefreshCw size={13} aria-hidden="true" />
+                            Reschedule
+                          </button>
+                        </div>
                       )}
                       {row.obligation_id &&
                         row.is_flexible &&

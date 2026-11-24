@@ -20,7 +20,10 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { db, databaseDialect } from "@/lib/db";
+import { GET as report } from "../../../reports/route";
 import { POST as complete } from "../complete/route";
+import { POST as overrideMissed } from "../override-missed/route";
+import { POST as reschedule } from "../reschedule/route";
 import { POST as review } from "../review/route";
 import { POST as undo } from "./route";
 
@@ -44,7 +47,7 @@ const call = (
   );
 const state = async () => (await db`SELECT * FROM chore_obligations WHERE id = ${obligation}`)[0];
 
-describe(`chore undo approval integration (${databaseDialect})`, () => {
+describe(`chore completion corrections (${databaseDialect})`, () => {
   beforeAll(async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-04T12:00:00Z"));
@@ -61,6 +64,7 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
     access.householdId = home;
     access.role = "device";
     await db`DELETE FROM audit_events`;
+    await db`DELETE FROM chore_obligations WHERE rescheduled_from_obligation_id IS NOT NULL`;
     await db`DELETE FROM chore_obligations`;
     await db`DELETE FROM chore_occurrences`;
     await db`DELETE FROM chore_templates`;
@@ -142,5 +146,50 @@ describe(`chore undo approval integration (${databaseDialect})`, () => {
     access.householdId = uuid(99);
     expect((await call(undo)).status).toBe(403);
     expect(await state()).toEqual(before);
+  });
+
+  it("credits a missed chore on its original date and records the parent override only once", async () => {
+    await db`UPDATE chore_templates SET schedule_kind = 'weekly', is_flexible = true WHERE id = ${template}`;
+    await db`UPDATE chore_occurrences SET scheduled_for = '2026-11-01' WHERE id = ${occurrence}`;
+    await db`UPDATE chore_obligations SET status = 'missed' WHERE id = ${obligation}`;
+    access.role = "parent";
+
+    expect(await (await call(overrideMissed)).json()).toEqual({ status: "completed" });
+    expect(await state()).toMatchObject({
+      status: "completed",
+      approval_status: "approved",
+      completed_by: child,
+      completed_at: null,
+      reviewed_by: parent,
+    });
+    const history = await report(new Request("http://localhost/api/v1/reports?from=2026-10-26&to=2026-11-01"));
+    expect(await history.json()).toMatchObject({
+      summary: { completed: 1, missed: 0 },
+      rows: [{ obligation_id: obligation, history_date: "2026-11-01", status: "completed" }],
+    });
+    expect((await call(overrideMissed)).status).toBe(400);
+    expect(await db`SELECT actor_id FROM audit_events WHERE action = 'chore.missed_overridden'`).toEqual([
+      { actor_id: parent },
+    ]);
+  });
+
+  it("requires a parent in the chore's household and a missed status", async () => {
+    access.role = "parent";
+    expect((await call(overrideMissed)).status).toBe(400);
+    await db`UPDATE chore_obligations SET status = 'missed' WHERE id = ${obligation}`;
+    access.role = "device";
+    expect((await call(overrideMissed)).status).toBe(401);
+    access.role = "parent";
+    access.householdId = uuid(99);
+    expect((await call(overrideMissed)).status).toBe(403);
+    expect((await state()).status).toBe("missed");
+  });
+
+  it("keeps an already rescheduled chore from receiving duplicate credit", async () => {
+    await db`UPDATE chore_obligations SET status = 'missed' WHERE id = ${obligation}`;
+    access.role = "parent";
+    expect((await call(reschedule, { scheduledFor: "2026-11-05" })).status).toBe(201);
+    expect((await call(overrideMissed)).status).toBe(400);
+    expect((await state()).status).toBe("missed");
   });
 });

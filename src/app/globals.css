@@ -3016,7 +3016,14 @@ progress::-moz-progress-bar {
   }
 }
 
-.history-undo-button {
+.history-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-undo-button,
+.history-complete-button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -3031,7 +3038,8 @@ progress::-moz-progress-bar {
   transition: all 0.15s ease;
 }
 
-.history-undo-button:hover:not(:disabled) {
+.history-undo-button:hover:not(:disabled),
+.history-complete-button:hover:not(:disabled) {
   background: var(--purple);
   color: #fff;
 }
